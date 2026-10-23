@@ -1,0 +1,16 @@
+ElectricLab is an offline virtual electricity laboratory for junior high school physics.
+
+Drag power sources, switches, lamps, resistors, rheostats, ammeters, voltmeters, electromagnets and other apparatus onto the bench. Connect wires yourself, close the switch and observe current, voltage, brightness and magnetic effects.
+
+Features:
+• Free wiring with terminals, bends, rewiring and crossing warnings
+• Circuit simulation for series, parallel, rheostats, motors, buzzers and LEDs
+• Meter reading practice with ranges, polarity, reversal and overload feedback
+• Experiment templates for common classroom demonstrations
+• 13 graded challenge tasks with data tables and conclusions
+• Magnets, solenoids, electromagnets and compass
+• Snapshots and measurement records
+
+The app is fully offline, has no ads and requests no network permission.
+
+Source code is licensed under GPL-3.0-or-later.
