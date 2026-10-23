@@ -522,7 +522,7 @@ fun LabApp(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("电学虚拟实验室  v2.1.14", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
+                        Text("电学虚拟实验室  v2.1.15", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
                         Text("适用于物理电学与电磁学启蒙实验。", fontSize = 12.sp)
                         Text(
                             "本项目与市面上所有相关产品及其运营方没有任何隶属、合作、授权或背书关系。\n" +
@@ -534,12 +534,12 @@ fun LabApp(
                         )
                         Text("完全离线运行，不收集任何数据。", fontSize = 12.sp)
                         Text(
-                            "感谢：梁文锋（杭州深度求索）、杨勇（海宁市安澜学校）、刘毅杰（第一师阿拉尔中学）",
+                            "感谢：梁圣、MrYang、류이제",
                             color = LabColors.InkMuted,
                             fontSize = 10.5.sp,
                             lineHeight = 16.sp,
                         )
-                        Text("©️ 2026 马辉山", color = LabColors.InkMuted, fontSize = 11.sp)
+                        Text("©️ 2026 휘산", color = LabColors.InkMuted, fontSize = 11.sp)
                     }
                 },
                 confirmButton = {
