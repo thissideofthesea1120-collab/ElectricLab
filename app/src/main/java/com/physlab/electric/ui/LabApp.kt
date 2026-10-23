@@ -518,13 +518,20 @@ fun LabApp(
                 text = {
                     Column(
                         Modifier
-                            .heightIn(max = 190.dp)
+                            .heightIn(max = 260.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("初中电学虚拟实验室  v2.1.13", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
-                        Text("适用于初中物理电学与电磁学启蒙实验。", fontSize = 12.sp)
-                        Text("界面遵循 Google Material 3；仪器均为 Canvas 矢量立体绘制，造型参考 2024 版人教版教材插图。", fontSize = 12.sp, lineHeight = 18.sp)
+                        Text("电学虚拟实验室  v2.1.14", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
+                        Text("适用于物理电学与电磁学启蒙实验。", fontSize = 12.sp)
+                        Text(
+                            "本项目与市面上所有相关产品及其运营方没有任何隶属、合作、授权或背书关系。\n" +
+                                "本项目未使用任何第三方的插图、图标、音频、题库、界面截图或专有代码。\n" +
+                                "应用中的仪器图形由项目使用 Android Canvas 独立绘制，属于通用实验器材造型。\n" +
+                                "项目中使用的第三方开源库遵循各自许可证，详见构建依赖与 LICENSE。",
+                            fontSize = 10.5.sp,
+                            lineHeight = 16.sp,
+                        )
                         Text("完全离线运行，不收集任何数据。", fontSize = 12.sp)
                         Text(
                             "感谢：梁文锋（杭州深度求索）、杨勇（海宁市安澜学校）、刘毅杰（第一师阿拉尔中学）",
@@ -731,7 +738,7 @@ private fun EditorTopBar(
             Spacer(Modifier.width(9.dp))
             Column(Modifier.width(if (compact) 136.dp else 178.dp)) {
                 Text(
-                    if (tiny) "电学实验室" else "初中电学虚拟实验室",
+                    if (tiny) "电学虚拟实验室" else "电学虚拟实验室",
                     color = LabColors.Ink,
                     fontSize = if (compact) 14.sp else 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -739,7 +746,7 @@ private fun EditorTopBar(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "2024 人教版 · 实物接线",
+                    "实物接线 · 电路仿真",
                     color = LabColors.InkFaint,
                     fontSize = 8.8.sp,
                     maxLines = 1,

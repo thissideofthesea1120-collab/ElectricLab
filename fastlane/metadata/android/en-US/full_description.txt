@@ -14,3 +14,5 @@ Features:
 The app is fully offline, has no ads and requests no network permission.
 
 Source code is licensed under GPL-3.0-or-later.
+
+This project has no affiliation, partnership, authorization, or endorsement relationship with any related products or their operators.

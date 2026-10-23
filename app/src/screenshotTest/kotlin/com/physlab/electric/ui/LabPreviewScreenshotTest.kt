@@ -1441,7 +1441,7 @@ fun InstrumentGalleryPreview() {
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "按 2024 人教版初中物理教材插图风格绘制 · 无需旋转",
+                "通用实验器材风格绘制 · 无需旋转",
                 color = Color(0xFF97A4B8),
                 fontSize = 10.sp,
             )
