@@ -25,3 +25,7 @@ keystore.properties
 # ide
 .idea/
 .DS_Store
+
+# large preview screenshots (fastlane has store images)
+screenshots/
+app/src/debug/screenshotTest/reference/
