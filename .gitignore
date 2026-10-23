@@ -1,0 +1,27 @@
+# build output
+*.iml
+.gradle/
+.kotlin/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.ap_
+*.dex
+*.log
+
+# local toolchains / caches
+.toolchain/
+.tmp/
+
+# signing material - never commit
+keystore/
+keystore.properties
+*.jks
+*.keystore
+
+# ide
+.idea/
+.DS_Store
