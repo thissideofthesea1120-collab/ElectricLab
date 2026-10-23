@@ -35,6 +35,7 @@ Builds:
     gradle:
       - yes
     prebuild:
+      - chmod +x gradlew
       - rm -f local.properties keystore.properties
 
 AutoUpdateMode: Version
