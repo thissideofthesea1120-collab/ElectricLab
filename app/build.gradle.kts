@@ -25,8 +25,8 @@ android {
         applicationId = "com.physlab.electric"
         minSdk = 23
         targetSdk = 35
-        versionCode = 37
-        versionName = "2.1.13"
+        versionCode = 42
+        versionName = "2.3.0"
         resourceConfigurations += listOf("zh")
     }
 
@@ -45,6 +45,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
         release {
             isMinifyEnabled = false
             isShrinkResources = false

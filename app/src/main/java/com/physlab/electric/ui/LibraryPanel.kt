@@ -342,6 +342,7 @@ fun categoryAccent(category: InstrumentCategory): Color = when (category) {
     InstrumentCategory.LOAD -> Color(0xFFFF8E7A)
     InstrumentCategory.METER -> Color(0xFF6FD5FF)
     InstrumentCategory.CONTROL -> Color(0xFFB9A2FF)
+    InstrumentCategory.DYNAMIC -> Color(0xFFFFA45C)
     InstrumentCategory.MAGNET -> Color(0xFF62E6A7)
     InstrumentCategory.WIRE -> Color(0xFFFFB28C)
 }

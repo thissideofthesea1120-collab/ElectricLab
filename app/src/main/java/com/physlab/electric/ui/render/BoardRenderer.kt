@@ -143,7 +143,12 @@ fun DrawScope.drawBoard(scene: BoardScene, density: Float) {
             brightness = lampBrightness(reading.power),
             slider = component.slider,
             meterFraction = if (reading.meterRange > 0f) {
-                (reading.meterSignedValue / reading.meterRange).coerceIn(-1f / 6f, 1f)
+                val fraction = reading.meterSignedValue / reading.meterRange
+                if (component.type == InstrumentType.GALVANOMETER) {
+                    fraction.coerceIn(-1f, 1f)
+                } else {
+                    fraction.coerceIn(-1f / 6f, 1f)
+                }
             } else {
                 null
             },
@@ -158,6 +163,9 @@ fun DrawScope.drawBoard(scene: BoardScene, density: Float) {
             rheostatMax = component.rheostatMax,
             supplyVoltage = component.supplyVoltage,
             supplyAc = component.supplyAc,
+            capacitanceUf = component.capacitanceUf,
+            inductanceMh = component.inductanceMh,
+            switchPosition = component.switchPosition,
             storageVoltage = component.storageVoltage,
             resistanceBoxValue = component.resistanceBoxValue,
             wireSampleIndex = component.wireSampleIndex,
@@ -789,6 +797,14 @@ private fun DrawScope.drawComponentLabel(
         component.type == InstrumentType.VOLTMETER ->
             if (showReadings) {
                 "${formatVoltmeter(reading.meterSignedValue)}${if (reading.meterOverRange) "  超范围" else if (reading.meterNegativeOverRange) "  超负刻度" else ""}"
+            } else ""
+        component.type == InstrumentType.GALVANOMETER ->
+            if (showReadings) {
+                "${formatNumber(reading.meterSignedValue)} μA${if (reading.meterOverRange) "  超范围" else ""}"
+            } else ""
+        component.type == InstrumentType.MILLIAMMETER ->
+            if (showReadings) {
+                "${formatNumber(reading.meterSignedValue)} mA${if (reading.meterOverRange) "  超范围" else if (reading.meterReversed) "  反接" else ""}"
             } else ""
         component.type == InstrumentType.LAMP || component.type == InstrumentType.TEMP_LAMP ->
             if (showReadings && reading.power > 0.03f) "${formatNumber(reading.power)} W" else ""

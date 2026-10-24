@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -24,17 +25,24 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardOptions
 import com.physlab.electric.model.CircuitSolution
 import com.physlab.electric.model.ComponentReading
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.LampSpec
+import com.physlab.electric.model.MeterResistanceMode
 import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.ResistanceWireSamples
 import com.physlab.electric.model.isMagnet
@@ -68,15 +76,15 @@ fun InstrumentSpecDialog(
         text = {
             Column(
                 Modifier
-                    .heightIn(max = 230.dp)
+                    .heightIn(max = 300.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (component.type != InstrumentType.RESISTANCE_WIRE) {
-                    InstrumentDetailSummary(component, reading, showReadings)
-                }
                 when (component.type) {
                     InstrumentType.BATTERY -> {
+                        if (component.specLocked) {
+                            Text("本关电池组规格已锁定，不能修改节数或内阻。", color = LabColors.Amber, fontSize = 10.sp)
+                        }
                         SourcePolarityRow(editor, component)
                         Text("7 号电池串联，每节 1.5 V", color = LabColors.InkMuted, fontSize = 10.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -94,11 +102,20 @@ fun InstrumentSpecDialog(
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
+                        InternalResistanceEditor(editor, component)
                     }
 
                     InstrumentType.POWER_SUPPLY -> {
+                        if (component.specLocked) {
+                            Text("本关电源规格已锁定，不能修改电压、内阻或交直流模式。", color = LabColors.Amber, fontSize = 10.sp)
+                        }
                         SourcePolarityRow(editor, component)
-                        Text("输出方式：直流 DC", color = LabColors.Ink, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (component.supplyAc) "输出方式：交流 AC 50Hz" else "输出方式：直流 DC",
+                            color = LabColors.Ink,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("输出电压", color = LabColors.InkMuted, fontSize = 10.sp)
                             Spacer(Modifier.weight(1f))
@@ -120,11 +137,20 @@ fun InstrumentSpecDialog(
                             ),
                         )
                         Text(
-                            "范围 0～36 V；学生电源只提供直流输出，已取消交流模式。",
+                            "范围 0～36 V；交流模式按有效值显示，纯电阻电路与直流等效。",
                             color = LabColors.InkFaint,
                             fontSize = 9.sp,
                             lineHeight = 13.sp,
                         )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OptionChip("直流 DC", !component.supplyAc) {
+                                editor.setSupplyAc(component.id, false)
+                            }
+                            OptionChip("交流 AC 50Hz", component.supplyAc) {
+                                editor.setSupplyAc(component.id, true)
+                            }
+                        }
+                        InternalResistanceEditor(editor, component)
                     }
 
                     InstrumentType.STORAGE_BATTERY -> {
@@ -137,6 +163,7 @@ fun InstrumentSpecDialog(
                                 }
                             }
                         }
+                        InternalResistanceEditor(editor, component)
                     }
 
                     InstrumentType.MOTOR -> {
@@ -188,10 +215,20 @@ fun InstrumentSpecDialog(
                             )
                         } else {
                             Text("定值电阻阻值", color = LabColors.InkMuted, fontSize = 10.sp)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                for (value in listOf(5f, 10f, 15f, 20f)) {
-                                    OptionChip("${value.toInt()} Ω", component.resistance == value) {
-                                        editor.setResistance(component.id, value)
+                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                for (rowValues in listOf(
+                                    listOf(5f, 10f, 15f, 20f),
+                                    listOf(50f, 100f, 10_000f),
+                                )) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        for (value in rowValues) {
+                                            OptionChip(
+                                                if (value >= 1000f) "${(value / 1000f).toInt()} kΩ" else "${value.toInt()} Ω",
+                                                component.resistance == value,
+                                            ) {
+                                                editor.setResistance(component.id, value)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -201,7 +238,7 @@ fun InstrumentSpecDialog(
                     InstrumentType.RHEOSTAT -> {
                         Text("最大阻值", color = LabColors.InkMuted, fontSize = 10.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (value in listOf(10f, 20f, 30f, 50f)) {
+                            for (value in listOf(10f, 20f, 30f, 50f, 100f)) {
                                 OptionChip("${value.toInt()} Ω", component.rheostatMax == value) {
                                     editor.setRheostatMax(component.id, value)
                                 }
@@ -213,6 +250,64 @@ fun InstrumentSpecDialog(
                             fontSize = 9.sp,
                             lineHeight = 13.sp,
                         )
+                    }
+
+                    InstrumentType.CAPACITOR -> {
+                        Text("电容量", color = LabColors.InkMuted, fontSize = 10.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (value in listOf(100f, 470f, 1000f)) {
+                                OptionChip("${value.toInt()} µF", component.capacitanceUf == value) {
+                                    editor.setCapacitance(component.id, value)
+                                }
+                            }
+                        }
+                        Text(
+                            "额定电压 16 V；充电后电容两端会保持电压。",
+                            color = LabColors.InkFaint,
+                            fontSize = 9.sp,
+                        )
+                        Text("正负极标记", color = LabColors.InkMuted, fontSize = 10.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OptionChip("默认：+ 左", !component.polarityFlipped) {
+                                editor.setPolarityFlipped(component.id, false)
+                            }
+                            OptionChip("翻转：+ 右", component.polarityFlipped) {
+                                editor.setPolarityFlipped(component.id, true)
+                            }
+                        }
+                        Text(
+                            "只改变电容正负极标记与接线柱颜色，不改变电容量。",
+                            color = LabColors.InkFaint,
+                            fontSize = 9.sp,
+                        )
+                    }
+
+                    InstrumentType.INDUCTOR -> {
+                        Text("电感量", color = LabColors.InkMuted, fontSize = 10.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (value in listOf(10f, 50f, 100f)) {
+                                OptionChip("${value.toInt()} mH", component.inductanceMh == value) {
+                                    editor.setInductance(component.id, value)
+                                }
+                            }
+                        }
+                        Text(
+                            "直流电阻：10 mH 1 Ω，50 mH 2 Ω，100 mH 4 Ω。",
+                            color = LabColors.InkFaint,
+                            fontSize = 9.sp,
+                        )
+                    }
+
+                    InstrumentType.SPDT_SWITCH -> {
+                        Text("单刀双掷开关", color = LabColors.InkMuted, fontSize = 10.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OptionChip("1 接 2", component.switchPosition == 0) {
+                                editor.setSwitchPosition(component.id, 0)
+                            }
+                            OptionChip("1 接 3", component.switchPosition == 1) {
+                                editor.setSwitchPosition(component.id, 1)
+                            }
+                        }
                     }
 
                     InstrumentType.RESISTANCE_BOX -> {
@@ -272,7 +367,7 @@ fun InstrumentSpecDialog(
                         )
                     }
 
-                    InstrumentType.AMMETER, InstrumentType.VOLTMETER -> {
+                    InstrumentType.AMMETER, InstrumentType.VOLTMETER, InstrumentType.MILLIAMMETER -> {
                         Text("接线柱方向", color = LabColors.InkMuted, fontSize = 10.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OptionChip("默认：− 左", !component.meterFlipped) {
@@ -283,14 +378,38 @@ fun InstrumentSpecDialog(
                             }
                         }
                         Text(
-                            if (component.type == InstrumentType.AMMETER) {
-                                "电流表有三个接线柱：− / 0.6 / 3。接哪个正接线柱就使用哪个测量范围。"
-                            } else {
-                                "电压表有三个接线柱：− / 3 / 15。接哪个正接线柱就使用哪个测量范围。"
+                            when (component.type) {
+                                InstrumentType.AMMETER ->
+                                    "电流表有三个接线柱：− / 0.6 / 3。接哪个正接线柱就使用哪个测量范围。"
+                                InstrumentType.MILLIAMMETER ->
+                                    "毫安表有三个接线柱：− / 50 mA / 500 mA。接哪个正接线柱就使用哪个测量范围。"
+                                else ->
+                                    "电压表有三个接线柱：− / 3 / 15。接哪个正接线柱就使用哪个测量范围。"
                             } + " 正常应让电流从正接线柱流入、负接线柱流出；接反时指针会向负刻度偏转，越过负刻度线才会损坏。",
                             color = LabColors.InkMuted,
                             fontSize = 10.sp,
                             lineHeight = 15.sp,
+                        )
+                        MeterResistanceEditor(editor, component)
+                    }
+
+                    InstrumentType.GALVANOMETER -> {
+                        Text("灵敏电流计", color = LabColors.InkMuted, fontSize = 10.sp)
+                        Text(
+                            "量程 −300 μA ～ 0 ～ +300 μA，中央零位；每小格 20 μA，内阻固定 50 Ω。",
+                            color = LabColors.InkFaint,
+                            fontSize = 9.sp,
+                            lineHeight = 13.sp,
+                        )
+                    }
+
+                    InstrumentType.MILLIAMMETER -> {
+                        Text("毫安表", color = LabColors.InkMuted, fontSize = 10.sp)
+                        Text(
+                            "量程 0～50 mA / 0～500 mA；分度值 2 mA / 20 mA，内阻固定 5 Ω。",
+                            color = LabColors.InkFaint,
+                            fontSize = 9.sp,
+                            lineHeight = 13.sp,
                         )
                     }
 
@@ -647,6 +766,114 @@ private fun OptionChip(text: String, selected: Boolean, onClick: () -> Unit) {
             color = if (selected) LabColors.Primary else LabColors.InkMuted,
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun InternalResistanceEditor(editor: LabEditorState, component: PlacedInstrument) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("电源内阻", color = LabColors.InkMuted, fontSize = 10.sp)
+            Text(
+                if (component.internalResistanceEnabled) {
+                    "手动设置 ${formatNumber(component.internalResistanceOhm)} Ω"
+                } else {
+                    "关闭：使用该电源的默认内阻"
+                },
+                color = LabColors.InkFaint,
+                fontSize = 9.sp,
+            )
+        }
+        Switch(
+            checked = component.internalResistanceEnabled,
+            onCheckedChange = { editor.setInternalResistanceEnabled(component.id, it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color(0xFF052E24),
+                checkedTrackColor = LabColors.Green,
+                uncheckedThumbColor = LabColors.InkMuted,
+                uncheckedTrackColor = LabColors.SurfaceHigh,
+            ),
+        )
+    }
+    if (component.internalResistanceEnabled) {
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            for (value in listOf(0.1f, 0.2f, 0.5f, 1f)) {
+                OptionChip("${formatNumber(value)} Ω", component.internalResistanceOhm == value) {
+                    editor.setInternalResistance(component.id, value)
+                }
+            }
+        }
+        var custom by remember(component.id) {
+            mutableStateOf(formatNumber(component.internalResistanceOhm))
+        }
+        OutlinedTextField(
+            value = custom,
+            onValueChange = { text ->
+                custom = text
+                text.replace(',', '.').toFloatOrNull()?.let { value ->
+                    if (value in 0.1f..1f) editor.setInternalResistance(component.id, value)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("自定义 0.1–1.0 Ω", fontSize = 9.sp) },
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        )
+    }
+}
+
+@Composable
+private fun MeterResistanceEditor(editor: LabEditorState, component: PlacedInstrument) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("仪表内阻", color = LabColors.InkMuted, fontSize = 10.sp)
+            Text(
+                if (component.meterResistanceEnabled) {
+                    "按实际仪表内阻参与电路计算"
+                } else {
+                    "关闭：使用理想化近似内阻"
+                },
+                color = LabColors.InkFaint,
+                fontSize = 9.sp,
+            )
+        }
+        Switch(
+            checked = component.meterResistanceEnabled,
+            onCheckedChange = { editor.setMeterResistanceEnabled(component.id, it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color(0xFF052E24),
+                checkedTrackColor = LabColors.Green,
+                uncheckedThumbColor = LabColors.InkMuted,
+                uncheckedTrackColor = LabColors.SurfaceHigh,
+            ),
+        )
+    }
+    if (component.meterResistanceEnabled) {
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            OptionChip(
+                "指针表",
+                component.meterResistanceMode == MeterResistanceMode.ANALOG,
+            ) { editor.setMeterResistanceMode(component.id, MeterResistanceMode.ANALOG) }
+            OptionChip(
+                "数字表",
+                component.meterResistanceMode == MeterResistanceMode.DIGITAL,
+            ) { editor.setMeterResistanceMode(component.id, MeterResistanceMode.DIGITAL) }
+            OptionChip(
+                "高精度",
+                component.meterResistanceMode == MeterResistanceMode.HIGH_PRECISION,
+            ) { editor.setMeterResistanceMode(component.id, MeterResistanceMode.HIGH_PRECISION) }
+        }
+        Text(
+            if (component.type == InstrumentType.AMMETER) {
+                "指针表：0.6A 档 0.1Ω / 3A 档 0.05Ω；数字表 0.01Ω；高精度 0.001Ω。"
+            } else {
+                "指针表：3V 档 3kΩ / 15V 档 15kΩ；数字表 1MΩ；高精度 10MΩ。"
+            },
+            color = LabColors.InkFaint,
+            fontSize = 9.sp,
+            lineHeight = 13.sp,
         )
     }
 }

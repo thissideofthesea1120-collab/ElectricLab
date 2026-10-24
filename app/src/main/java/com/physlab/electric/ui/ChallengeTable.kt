@@ -51,11 +51,63 @@ fun ChallengeDataTable(
             fontSize = 9.2.sp,
             fontWeight = FontWeight.SemiBold,
         )
+        if (task == ChallengeTask.CAPACITOR_CHARGE && active) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Text(
+                    "实验计时 " + String.format(
+                        java.util.Locale.US,
+                        "%.1f s",
+                        editor.challengeElapsedMs / 1000f,
+                    ),
+                    color = LabColors.Amber,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                Surface(
+                    onClick = {
+                        if (editor.challengeCapacitorActiveRow == null) {
+                            val time = String.format(
+                                java.util.Locale.US,
+                                "%.1f",
+                                editor.challengeElapsedMs / 1000f,
+                            )
+                            editor.recordCapacitorRow(time)
+                        } else if (!editor.saveCapacitorRow()) {
+                            editor.notify("请先填写本行的 Uc 和 I")
+                        }
+                    },
+                    shape = RoundedCornerShape(7.dp),
+                    color = LabColors.Primary.copy(alpha = 0.14f),
+                    border = BorderStroke(1.dp, LabColors.Primary.copy(alpha = 0.35f)),
+                ) {
+                    Text(
+                        if (editor.challengeCapacitorActiveRow == null) "记录本次数据" else "保存本行",
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                        color = LabColors.Primary,
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
         if (active && table.columns.indices.any { it !in table.calculatedColumns } &&
-            editor.challengeDataTokens <= 0
+            editor.challengeDataTokens <= 0 && task != ChallengeTask.CAPACITOR_CHARGE
         ) {
             Text(
                 "请先点击电流表或电压表，完成表盘读数验证后再填写一处数据。",
+                color = LabColors.Amber,
+                fontSize = 8.2.sp,
+                lineHeight = 11.sp,
+            )
+        }
+        if (active && task == ChallengeTask.CAPACITOR_CHARGE) {
+            Text(
+                "点击“记录本次数据”会暂停计时并自动填入时间；电压表验证后填 Uc，灵敏电流计验证后填 I。",
                 color = LabColors.Amber,
                 fontSize = 8.2.sp,
                 lineHeight = 11.sp,
@@ -114,7 +166,8 @@ fun ChallengeDataTable(
                 for (column in table.columns.indices) {
                     val key = challengeCellKey(task, rowIndex, column)
                     val measured = active && column !in table.calculatedColumns
-                    val enabled = if (measured) editor.canEditChallengeCell(key) else active
+                    val autoTime = task == ChallengeTask.CAPACITOR_CHARGE && column == 0
+                    val enabled = if (autoTime) false else if (measured) editor.canEditChallengeCell(key) else active
                     if (table.choiceColumn == column && table.choiceOptions.isNotEmpty()) {
                         var expanded by remember { androidx.compose.runtime.mutableStateOf(false) }
                         val current = editor.challengeInputs[key].orEmpty()
@@ -187,6 +240,9 @@ fun ChallengeDataTable(
             fontSize = 8.5.sp,
             modifier = Modifier.padding(top = 3.dp),
         )
+        if (task == ChallengeTask.EMF_INTERNAL_RESISTANCE) {
+            EmfCalculationPanel(editor, active)
+        }
         val conclusion = table.conclusion
         if (conclusion != null) {
             Spacer(Modifier.height(6.dp))
@@ -230,4 +286,54 @@ fun ChallengeDataTable(
             }
         }
     }
+}
+
+@Composable
+private fun EmfCalculationPanel(editor: LabEditorState, active: Boolean) {
+    Spacer(Modifier.height(5.dp))
+    Text(
+        "计算结果：用第 1/4、2/5、3/6 组分别联立求 E、r，再取平均值",
+        color = LabColors.Amber,
+        fontSize = 8.3.sp,
+        lineHeight = 11.sp,
+    )
+    val pairKeys = listOf(
+        Triple("第 1、4 组", EMF_E1_KEY, EMF_R1_KEY),
+        Triple("第 2、5 组", EMF_E2_KEY, EMF_R2_KEY),
+        Triple("第 3、6 组", EMF_E3_KEY, EMF_R3_KEY),
+        Triple("平均值", EMF_E_AVG_KEY, EMF_R_AVG_KEY),
+    )
+    for ((label, eKey, rKey) in pairKeys) {
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                label,
+                modifier = Modifier.width(58.dp),
+                color = LabColors.InkFaint,
+                fontSize = 8.sp,
+            )
+            ResultField(editor, eKey, "E/V", active, Modifier.weight(1f))
+            ResultField(editor, rKey, "r/Ω", active, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun ResultField(editor: LabEditorState, key: String, label: String, active: Boolean, modifier: Modifier) {
+    OutlinedTextField(
+        value = editor.challengeInputs[key].orEmpty(),
+        onValueChange = { if (active) editor.updateChallengeInput(key, it) },
+        modifier = modifier,
+        singleLine = true,
+        enabled = active,
+        textStyle = androidx.compose.ui.text.TextStyle(
+            color = LabColors.Ink,
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center,
+        ),
+        placeholder = { Text(label, color = LabColors.InkFaint, fontSize = 8.sp) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+    )
 }

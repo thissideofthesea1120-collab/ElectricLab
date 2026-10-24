@@ -9,6 +9,7 @@ import com.physlab.electric.model.CircuitSolution
 import com.physlab.electric.model.InstrumentCategory
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.LampSpec
+import com.physlab.electric.model.MeterResistanceMode
 import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.Selection
 import com.physlab.electric.model.TerminalRef
@@ -35,6 +36,7 @@ enum class ExperimentTemplate(
     OHM_LAW("伏安法测电阻", "滑动变阻器、电压表、电流表测未知电阻"),
     ELECTROMAGNET("电磁铁与磁场", "电磁铁、螺线管、小磁针"),
     MAGNETS("磁体间相互作用", "两块条形磁体与小磁针"),
+    RC_CHARGE("观察电容器充、放电实验", "电容、电阻、电表等已摆好，请按步骤接线"),
 }
 
 @Stable
@@ -66,6 +68,8 @@ class LabEditorState {
         private set
     var templateDialogOpen by mutableStateOf(false)
         private set
+    var topologyEpoch by mutableStateOf(0L)
+        private set
     var schematicOpen by mutableStateOf(false)
         private set
     var helpOpen by mutableStateOf(false)
@@ -83,6 +87,18 @@ class LabEditorState {
     var challengeDataActiveKey by mutableStateOf<String?>(null)
         private set
     var challengeDataEditVersion by mutableStateOf(0)
+        private set
+    var challengeCapacitorVoltageTokens by mutableStateOf(0)
+        private set
+    var challengeCapacitorCurrentTokens by mutableStateOf(0)
+        private set
+    var challengeCapacitorActiveRow by mutableStateOf<Int?>(null)
+        private set
+    var challengeElapsedMs by mutableStateOf(0L)
+        private set
+    var challengeTimerRunning by mutableStateOf(false)
+        private set
+    var challengeTimerPaused by mutableStateOf(false)
         private set
     var challengeConclusionChoices by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
@@ -210,7 +226,7 @@ class LabEditorState {
 
     fun openMeterZoom(id: Long) {
         val component = components.firstOrNull { it.id == id } ?: return
-        if (component.type != InstrumentType.AMMETER && component.type != InstrumentType.VOLTMETER) return
+        if (!component.type.isMeter) return
         meterZoomId = id
         wirePanelId = null
         selection = Selection(componentId = id)
@@ -610,6 +626,7 @@ class LabEditorState {
     fun clearAll() {
         if (components.isEmpty() && wires.isEmpty()) return
         pushHistory()
+        topologyEpoch += 1
         components = emptyList()
         wires = emptyList()
         selection = Selection()
@@ -685,6 +702,7 @@ class LabEditorState {
 
     fun setBatteryCells(id: Long, cells: Int) {
         if (components.none { it.id == id && it.type == InstrumentType.BATTERY }) return
+        if (components.any { it.id == id && it.specLocked }) return
         pushHistory()
         components = components.map {
             if (it.id == id) it.copy(batteryCells = cells.coerceIn(1, 4)) else it
@@ -731,7 +749,7 @@ class LabEditorState {
         if (components.any { it.id == id && it.resistanceHidden }) return
         pushHistory()
         components = components.map {
-            if (it.id == id) it.copy(resistance = resistance.coerceIn(1f, 100f)) else it
+            if (it.id == id) it.copy(resistance = resistance.coerceIn(1f, 10_000f)) else it
         }
     }
 
@@ -756,6 +774,7 @@ class LabEditorState {
 
     fun setSupplyVoltage(id: Long, voltage: Float) {
         if (components.none { it.id == id && it.type == InstrumentType.POWER_SUPPLY }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
         components = components.map {
             if (it.id == id) it.copy(supplyVoltage = voltage.coerceIn(0f, 36f)) else it
         }
@@ -763,8 +782,71 @@ class LabEditorState {
 
     fun setSupplyAc(id: Long, ac: Boolean) {
         if (components.none { it.id == id && it.type == InstrumentType.POWER_SUPPLY }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
         components = components.map {
             if (it.id == id) it.copy(supplyAc = ac) else it
+        }
+    }
+
+    fun setInternalResistanceEnabled(id: Long, enabled: Boolean) {
+        if (components.none { it.id == id && it.type.isPowerSource }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(internalResistanceEnabled = enabled) else it
+        }
+    }
+
+    fun setInternalResistance(id: Long, ohms: Float) {
+        if (components.none { it.id == id && it.type.isPowerSource }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
+        components = components.map {
+            if (it.id == id) it.copy(internalResistanceOhm = ohms.coerceIn(0.1f, 1f)) else it
+        }
+    }
+
+    fun setMeterResistanceEnabled(id: Long, enabled: Boolean) {
+        if (components.none { it.id == id && it.type.isMeter }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(meterResistanceEnabled = enabled) else it
+        }
+    }
+
+    fun setMeterResistanceMode(id: Long, mode: MeterResistanceMode) {
+        if (components.none { it.id == id && it.type.isMeter }) return
+        components = components.map {
+            if (it.id == id) it.copy(meterResistanceMode = mode) else it
+        }
+    }
+
+    fun setCapacitance(id: Long, uf: Float) {
+        if (components.none { it.id == id && it.type == InstrumentType.CAPACITOR }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(capacitanceUf = uf) else it
+        }
+    }
+
+    fun setInductance(id: Long, mh: Float) {
+        if (components.none { it.id == id && it.type == InstrumentType.INDUCTOR }) return
+        pushHistory()
+        val dc = when (mh.toInt()) {
+            10 -> 1f
+            50 -> 2f
+            100 -> 4f
+            else -> 2f
+        }
+        components = components.map {
+            if (it.id == id) it.copy(inductanceMh = mh, inductanceDcResistance = dc) else it
+        }
+    }
+
+    fun setSwitchPosition(id: Long, position: Int) {
+        if (components.none { it.id == id && it.type == InstrumentType.SPDT_SWITCH }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(switchPosition = position.coerceIn(0, 2)) else it
         }
     }
 
@@ -802,6 +884,7 @@ class LabEditorState {
 
     fun setPolarityFlipped(id: Long, flipped: Boolean) {
         if (components.none { it.id == id }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
         pushHistory()
         components = components.map {
             if (it.id == id) it.copy(polarityFlipped = flipped) else it
@@ -956,6 +1039,16 @@ class LabEditorState {
                     put("rheostatMax", component.rheostatMax)
                     put("supplyVoltage", component.supplyVoltage)
                     put("supplyAc", component.supplyAc)
+                    put("internalResistanceEnabled", component.internalResistanceEnabled)
+                    put("internalResistanceOhm", component.internalResistanceOhm)
+                    put("internalResistanceHidden", component.internalResistanceHidden)
+                    put("specLocked", component.specLocked)
+                    put("meterResistanceEnabled", component.meterResistanceEnabled)
+                    put("meterResistanceMode", component.meterResistanceMode.name)
+                    put("capacitanceUf", component.capacitanceUf)
+                    put("inductanceMh", component.inductanceMh)
+                    put("inductanceDcResistance", component.inductanceDcResistance)
+                    put("switchPosition", component.switchPosition)
                     put("storageVoltage", component.storageVoltage)
                     put("resistanceBoxValue", component.resistanceBoxValue)
                     put("wireSample", component.wireSampleIndex)
@@ -1033,7 +1126,19 @@ class LabEditorState {
                 slider = item.optDouble("slider", 0.5).toFloat().coerceIn(0f, 1f),
                 rheostatMax = item.optDouble("rheostatMax", 20.0).toFloat().coerceIn(1f, 100f),
                 supplyVoltage = item.optDouble("supplyVoltage", 12.0).toFloat().coerceIn(0f, 36f),
-                supplyAc = false,
+                supplyAc = item.optBoolean("supplyAc", false),
+                internalResistanceEnabled = item.optBoolean("internalResistanceEnabled", false),
+                internalResistanceOhm = item.optDouble("internalResistanceOhm", 0.1).toFloat().coerceIn(0.1f, 1f),
+                internalResistanceHidden = item.optBoolean("internalResistanceHidden", false),
+                specLocked = item.optBoolean("specLocked", false),
+                meterResistanceEnabled = item.optBoolean("meterResistanceEnabled", false),
+                meterResistanceMode = runCatching {
+                    MeterResistanceMode.valueOf(item.optString("meterResistanceMode", MeterResistanceMode.ANALOG.name))
+                }.getOrDefault(MeterResistanceMode.ANALOG),
+                capacitanceUf = item.optDouble("capacitanceUf", 470.0).toFloat(),
+                inductanceMh = item.optDouble("inductanceMh", 50.0).toFloat(),
+                inductanceDcResistance = item.optDouble("inductanceDcResistance", 2.0).toFloat(),
+                switchPosition = item.optInt("switchPosition", 0).coerceIn(0, 2),
                 storageVoltage = item.optDouble("storageVoltage", 6.0).toFloat(),
                 resistanceBoxValue = item.optInt("resistanceBoxValue", 100).coerceIn(0, 9999),
                 wireSampleIndex = item.optInt("wireSample", 0).coerceIn(0, 3),
@@ -1128,6 +1233,7 @@ class LabEditorState {
             )
         }
         boardZoom = 1f
+        topologyEpoch += 1
         seeded = true
         toast = "已载入实验快照"
         return true
@@ -1184,6 +1290,12 @@ class LabEditorState {
             challengeActive = false
             challengeDataTokens = 0
             challengeDataActiveKey = null
+            challengeCapacitorVoltageTokens = 0
+            challengeCapacitorCurrentTokens = 0
+            challengeCapacitorActiveRow = null
+            challengeElapsedMs = 0L
+            challengeTimerRunning = false
+            challengeTimerPaused = false
             challengeLampSpecChanges = 0
         }
         challengeIndex = next
@@ -1214,6 +1326,12 @@ class LabEditorState {
         challengeConclusionChoices = emptyMap()
         challengeDataTokens = 0
         challengeDataActiveKey = null
+        challengeCapacitorVoltageTokens = 0
+        challengeCapacitorCurrentTokens = 0
+        challengeCapacitorActiveRow = null
+        challengeElapsedMs = 0L
+        challengeTimerRunning = false
+        challengeTimerPaused = false
         challengeLampSpecChanges = 0
         challengeResult = null
         challengeIndex = task.ordinal
@@ -1231,6 +1349,24 @@ class LabEditorState {
                 addInstrument(InstrumentType.TEMP_LAMP, Offset(boardWidth / 2f, boardHeight / 2f))
                 components.lastOrNull()?.let {
                     setLampSpec(it.id, LampSpec.entries.random())
+                }
+            }
+            ChallengeTarget.BATTERY_SOURCE -> {
+                addInstrument(InstrumentType.BATTERY, Offset(boardWidth / 2f, boardHeight / 2f))
+                components.lastOrNull()?.let { source ->
+                    components = components.map {
+                        if (it.id == source.id) {
+                            it.copy(
+                                batteryCells = 2,
+                                internalResistanceEnabled = true,
+                                internalResistanceOhm = (0.2f + 0.8f * kotlin.random.Random.nextFloat()),
+                                internalResistanceHidden = true,
+                                specLocked = true,
+                            )
+                        } else {
+                            it
+                        }
+                    }
                 }
             }
             null -> Unit
@@ -1251,6 +1387,9 @@ class LabEditorState {
         challengeActive = false
         challengeOpen = false
         challengeResult = null
+        challengeTimerRunning = false
+        challengeTimerPaused = false
+        challengeCapacitorActiveRow = null
         toast = "已退出任务闯关模式"
     }
 
@@ -1259,22 +1398,98 @@ class LabEditorState {
         challengeResult = null
     }
 
-    fun grantChallengeDataEntry() {
+    fun grantChallengeDataEntry(meterType: InstrumentType? = null) {
         if (!challengeActive) return
+        if (ChallengeTask.entries[challengeIndex] == ChallengeTask.CAPACITOR_CHARGE) {
+            when (meterType) {
+                InstrumentType.VOLTMETER -> challengeCapacitorVoltageTokens = 1
+                InstrumentType.GALVANOMETER -> challengeCapacitorCurrentTokens = 1
+                else -> Unit
+            }
+            return
+        }
         if (challengeDataActiveKey == null) {
             challengeDataTokens = 1
         }
     }
 
     fun canEditChallengeCell(key: String): Boolean {
-        if (!challengeActive || challengeDataTokens <= 0) return false
+        if (!challengeActive) return false
+        val task = ChallengeTask.entries[challengeIndex]
+        if (task == ChallengeTask.CAPACITOR_CHARGE) {
+            val parts = key.split(':')
+            if (parts.size != 3) return false
+            val row = parts[1].toIntOrNull() ?: return false
+            val column = parts[2].toIntOrNull() ?: return false
+            if (challengeCapacitorActiveRow != row) return false
+            return when (column) {
+                1 -> challengeCapacitorVoltageTokens > 0
+                2 -> challengeCapacitorCurrentTokens > 0
+                else -> false
+            }
+        }
+        if (challengeDataTokens <= 0) return false
         return challengeDataActiveKey == null || challengeDataActiveKey == key
     }
 
     fun noteChallengeCellEdited(key: String) {
-        if (!challengeActive || challengeDataTokens <= 0) return
+        if (!challengeActive) return
+        if (ChallengeTask.entries[challengeIndex] == ChallengeTask.CAPACITOR_CHARGE) return
+        if (challengeDataTokens <= 0) return
         challengeDataActiveKey = key
         challengeDataEditVersion += 1
+    }
+
+    fun recordCapacitorRow(timeText: String) {
+        if (!challengeActive) return
+        if (ChallengeTask.entries[challengeIndex] != ChallengeTask.CAPACITOR_CHARGE) return
+        if (challengeCapacitorActiveRow != null) return
+        val row = (0..5).firstOrNull {
+            challengeInputs[challengeCellKey(ChallengeTask.CAPACITOR_CHARGE, it, 0)].isNullOrBlank()
+        } ?: return
+        challengeCapacitorActiveRow = row
+        challengeTimerPaused = true
+        updateChallengeInput(challengeCellKey(ChallengeTask.CAPACITOR_CHARGE, row, 0), timeText)
+    }
+
+    fun saveCapacitorRow(): Boolean {
+        if (!challengeActive) return false
+        if (ChallengeTask.entries[challengeIndex] != ChallengeTask.CAPACITOR_CHARGE) return false
+        val row = challengeCapacitorActiveRow ?: return false
+        val voltage = challengeInputs[challengeCellKey(ChallengeTask.CAPACITOR_CHARGE, row, 1)].orEmpty().trim()
+        val current = challengeInputs[challengeCellKey(ChallengeTask.CAPACITOR_CHARGE, row, 2)].orEmpty().trim()
+        if (voltage.isBlank() || current.isBlank()) return false
+        challengeCapacitorVoltageTokens = 0
+        challengeCapacitorCurrentTokens = 0
+        challengeCapacitorActiveRow = null
+        challengeTimerPaused = false
+        return true
+    }
+
+    fun startCapacitorTimerIfNeeded(solution: CircuitSolution) {
+        if (!challengeActive) return
+        if (ChallengeTask.entries[challengeIndex] != ChallengeTask.CAPACITOR_CHARGE) return
+        if (challengeTimerRunning || challengeTimerPaused) return
+        val capacitor = components.firstOrNull { it.type == InstrumentType.CAPACITOR } ?: return
+        val current = solution.readings[capacitor.id]?.signedCurrent ?: 0f
+        if (kotlin.math.abs(current) > 0.000001f) {
+            challengeTimerRunning = true
+        }
+    }
+
+    fun advanceChallengeTimer(deltaMs: Long) {
+        if (!challengeActive || !challengeTimerRunning || challengeTimerPaused) return
+        challengeElapsedMs += deltaMs
+    }
+
+    fun pauseChallengeTimer() {
+        if (challengeActive && challengeTimerRunning) challengeTimerPaused = true
+    }
+
+    fun resumeChallengeTimer() {
+        if (challengeActive && challengeTimerRunning && challengeCapacitorActiveRow == null) {
+            challengeTimerPaused = false
+        }
     }
 
     fun finishChallengeDataEntry() {
@@ -1290,6 +1505,9 @@ class LabEditorState {
         onProgressSaved: ((Map<Int, Int>) -> Unit)? = null,
     ) {
         challengeIndex = task.ordinal
+        challengeTimerRunning = false
+        challengeTimerPaused = false
+        challengeCapacitorActiveRow = null
         challengeDataTokens = 0
         challengeDataActiveKey = null
         challengeResult = evaluateChallenge(
@@ -1346,6 +1564,7 @@ class LabEditorState {
     fun loadTemplate(template: ExperimentTemplate) {
         if (boardWidth < 200f || boardHeight < 150f) return
         pushHistory()
+        topologyEpoch += 1
         components = emptyList()
         wires = emptyList()
         selection = Selection()
@@ -1419,7 +1638,7 @@ class LabEditorState {
                     type = InstrumentType.BATTERY,
                     center = Offset(start + usable * 0.08f, bottom),
                     label = "电源",
-                    batteryCells = 2,
+                    batteryCells = 1,
                 )
                 val switch = PlacedInstrument(
                     id = nextId++,
@@ -1451,10 +1670,10 @@ class LabEditorState {
                 components = listOf(battery, switch, lamp1, lamp2, ammeter)
                 wires = listOf(
                     WireSegment(nextId++, TerminalRef(battery.id, 1), TerminalRef(switch.id, 0), WireColor.RED),
-                    WireSegment(nextId++, TerminalRef(switch.id, 1), TerminalRef(lamp1.id, 0), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(switch.id, 1), TerminalRef(lamp2.id, 0), WireColor.RED),
                     WireSegment(nextId++, TerminalRef(lamp1.id, 0), TerminalRef(lamp2.id, 0), WireColor.BLACK),
-                    WireSegment(nextId++, TerminalRef(lamp1.id, 1), TerminalRef(ammeter.id, 1), WireColor.RED),
-                    WireSegment(nextId++, TerminalRef(lamp2.id, 1), TerminalRef(lamp1.id, 1), WireColor.BLACK),
+                    WireSegment(nextId++, TerminalRef(lamp2.id, 1), TerminalRef(ammeter.id, 2), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(lamp1.id, 1), TerminalRef(lamp2.id, 1), WireColor.BLACK),
                     WireSegment(nextId++, TerminalRef(ammeter.id, 0), TerminalRef(battery.id, 0), WireColor.BLACK),
                 )
             }
@@ -1570,6 +1789,61 @@ class LabEditorState {
                 )
                 components = listOf(magnet1, magnet2, compass)
             }
+
+            ExperimentTemplate.RC_CHARGE -> {
+                val battery = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.BATTERY,
+                    center = Offset(start + usable * 0.08f, top + (bottom - top) * 0.893f),
+                    label = "电源",
+                    batteryCells = 2,
+                )
+                val switch = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.SPDT_SWITCH,
+                    center = Offset(start + usable * 0.315f, top + (bottom - top) * 0.371f),
+                    label = "S",
+                    switchPosition = 2,
+                )
+                val resistor = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.RESISTOR,
+                    center = Offset(start + usable * 0.667f, bottom),
+                    label = "R",
+                    resistance = 10_000f,
+                )
+                val galvanometer = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.GALVANOMETER,
+                    center = Offset(start + usable * 0.57f, top),
+                    label = "G",
+                )
+                val capacitor = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.CAPACITOR,
+                    center = Offset(start + usable * 0.92f, top + (bottom - top) * 0.551f),
+                    label = "C",
+                    capacitanceUf = 1000f,
+                )
+                val voltmeter = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.VOLTMETER,
+                    center = Offset(start + usable * 0.907f, top + (bottom - top) * 0.043f),
+                    label = "V",
+                    meterFlipped = true,
+                )
+                components = listOf(battery, switch, resistor, galvanometer, capacitor, voltmeter)
+                wires = listOf(
+                    WireSegment(nextId++, TerminalRef(battery.id, 1), TerminalRef(switch.id, 1), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(switch.id, 0), TerminalRef(galvanometer.id, 0), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(switch.id, 2), TerminalRef(resistor.id, 0), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(capacitor.id, 0), TerminalRef(galvanometer.id, 1), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(capacitor.id, 1), TerminalRef(resistor.id, 1), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(voltmeter.id, 0), TerminalRef(capacitor.id, 1), WireColor.BLACK),
+                    WireSegment(nextId++, TerminalRef(voltmeter.id, 1), TerminalRef(capacitor.id, 0), WireColor.BLACK),
+                    WireSegment(nextId++, TerminalRef(battery.id, 0), TerminalRef(resistor.id, 0), WireColor.BLACK),
+                )
+            }
         }
         toast = "已载入${template.title}"
     }
@@ -1640,6 +1914,8 @@ class LabEditorState {
             InstrumentType.SWITCH -> "S"
             InstrumentType.AMMETER -> "A"
             InstrumentType.VOLTMETER -> "V"
+            InstrumentType.GALVANOMETER -> "G"
+            InstrumentType.MILLIAMMETER -> "mA"
             InstrumentType.RESISTOR -> "R"
             InstrumentType.RHEOSTAT -> "R"
             InstrumentType.RESISTANCE_BOX -> "R箱"
@@ -1653,6 +1929,9 @@ class LabEditorState {
             InstrumentType.HORSESHOE_MAGNET -> "磁体"
             InstrumentType.COMPASS -> "磁针"
             InstrumentType.PAPERCLIPS -> "回形针"
+            InstrumentType.SPDT_SWITCH -> "S₂"
+            InstrumentType.CAPACITOR -> "C"
+            InstrumentType.INDUCTOR -> "L"
         }
         var index = 1
         var candidate: String
@@ -1666,6 +1945,7 @@ class LabEditorState {
     private fun currentSnapshot(): Snapshot = Snapshot(components, wires, nextId)
 
     private fun restore(snapshot: Snapshot) {
+        topologyEpoch += 1
         components = snapshot.components
         wires = snapshot.wires
         nextId = snapshot.nextId

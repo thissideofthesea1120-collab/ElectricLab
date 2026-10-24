@@ -58,6 +58,7 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                             ExperimentTemplate.OHM_LAW -> LabColors.Amber
                             ExperimentTemplate.ELECTROMAGNET -> LabColors.Violet
                             ExperimentTemplate.MAGNETS -> Color(0xFFFF8E7A)
+                            ExperimentTemplate.RC_CHARGE -> Color(0xFF7ED6C4)
                         },
                         onClick = {
                             editor.loadTemplate(template)

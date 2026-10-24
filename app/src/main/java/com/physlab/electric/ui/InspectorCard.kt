@@ -364,6 +364,21 @@ private fun ComponentInspector(
                 SpecText("放在磁体或通电线圈附近，会被吸引并靠近磁极；移开磁体后恢复原位")
             }
 
+            InstrumentType.SPDT_SWITCH -> {
+                Text("单刀双掷开关", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                SpecText(if (component.switchPosition == 0) "当前：1 接 2" else "当前：1 接 3")
+            }
+
+            InstrumentType.CAPACITOR -> {
+                Text("电容 ${formatNumber(component.capacitanceUf)} µF", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                SpecText("额定电压 16 V；充电后两端有电压")
+            }
+
+            InstrumentType.INDUCTOR -> {
+                Text("电感 ${formatNumber(component.inductanceMh)} mH", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                SpecText("直流电阻 ${formatNumber(component.inductanceDcResistance)} Ω")
+            }
+
             InstrumentType.AMMETER -> {
                 val range = reading?.meterRangeLabel?.ifBlank { "0.6A" } ?: "0.6A"
                 if (showReadings) {
@@ -404,6 +419,38 @@ private fun ComponentInspector(
                         color = LabColors.InkFaint,
                         fontSize = 9.sp,
                     )
+                    ReadingHiddenNote()
+                }
+            }
+
+            InstrumentType.GALVANOMETER -> {
+                val range = "±300 μA"
+                if (showReadings) {
+                    MeterReading(
+                        label = "灵敏电流计示数",
+                        value = "${formatNumber(reading?.meterSignedValue ?: 0f)} μA",
+                        hint = "使用 $range 测量范围　串联接入",
+                    )
+                    ReadingRow("测量范围选择", range)
+                } else {
+                    Text("灵敏电流计 · 请直接读取中央零位表盘", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    ReadingRow("当前测量范围", range)
+                    ReadingHiddenNote()
+                }
+            }
+
+            InstrumentType.MILLIAMMETER -> {
+                val range = reading?.meterRangeLabel?.ifBlank { "50mA" } ?: "50mA"
+                if (showReadings) {
+                    MeterReading(
+                        label = "毫安表示数",
+                        value = "${formatNumber(reading?.meterSignedValue ?: 0f)} mA",
+                        hint = "使用 0～$range 测量范围　串联接入",
+                    )
+                    ReadingRow("测量范围选择", "0～$range")
+                } else {
+                    Text("毫安表 · 请直接读取表盘", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    ReadingRow("当前测量范围", "0～$range")
                     ReadingHiddenNote()
                 }
             }

@@ -1,1 +1,1 @@
-Offline virtual electricity lab for junior high physics: wiring, meters, challenges.
+Offline virtual electricity lab for middle and high school physics: wiring, meters, challenges.

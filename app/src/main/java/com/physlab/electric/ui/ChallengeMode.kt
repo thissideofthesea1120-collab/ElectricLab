@@ -4,6 +4,8 @@ import com.physlab.electric.model.CircuitSolution
 import com.physlab.electric.model.CircuitStatus
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.PlacedInstrument
+import com.physlab.electric.model.isPowerSource
+import com.physlab.electric.model.isMeter
 import com.physlab.electric.ui.render.formatNumber
 import kotlin.math.abs
 import kotlin.math.max
@@ -29,6 +31,7 @@ data class ChallengeTableSpec(
 enum class ChallengeTarget {
     FIXED_RESISTOR,
     TEMP_LAMP,
+    BATTERY_SOURCE,
 }
 
 enum class ChallengeTask(
@@ -244,6 +247,39 @@ enum class ChallengeTask(
         ),
         ChallengeTarget.TEMP_LAMP,
     ),
+    CAPACITOR_CHARGE(
+        "观察电容器的充、放电现象",
+        "高中拓展",
+        "连接电容、电阻、单刀双掷开关和电源；先充电再放电，记录 3 个充电点和 3 个放电点的电容电压与电流。",
+        ChallengeTableSpec(
+            columns = listOf("时间 t/s", "电容电压 Uc/V", "电流 I/μA"),
+            unit = "",
+            hint = "充电时 Uc 逐渐增大、电流逐渐减小；放电时 Uc 逐渐减小、电流方向与充电相反。",
+            rowLabels = listOf("充电 1", "充电 2", "充电 3", "放电 1", "放电 2", "放电 3"),
+            calculatedColumns = setOf(0),
+            conclusion = ChallengeConclusion(
+                "电容器充、放电现象说明什么？",
+                listOf(
+                    "电容器只能通过直流电",
+                    "电容器可以储存电荷，放电电流方向与充电相反",
+                    "电容器放电时电压保持不变",
+                ),
+                1,
+            ),
+        ),
+    ),
+    EMF_INTERNAL_RESISTANCE(
+        "测量电源的电动势和内阻",
+        "高中拓展",
+        "用电压表测路端电压、电流表测电流，改变滑动变阻器得到六组数据；用第 1/4、2/5、3/6 组分别联立求 E、r，再取平均值。",
+        ChallengeTableSpec(
+            columns = listOf("路端电压 U/V", "电流 I/A"),
+            unit = "",
+            hint = "E = U + Ir；用两组数据联立：r=(U1−U2)/(I2−I1)，E=U1+I1r。六组测完后填写三组结果及平均值。",
+            rowLabels = listOf("第 1 组", "第 2 组", "第 3 组", "第 4 组", "第 5 组", "第 6 组"),
+        ),
+        ChallengeTarget.BATTERY_SOURCE,
+    ),
 }
 
 data class ChallengeCheck(val text: String, val done: Boolean)
@@ -257,6 +293,15 @@ data class ChallengeResult(
 
 fun challengeCellKey(task: ChallengeTask, row: Int, column: Int): String =
     "${task.name}:$row:$column"
+
+const val EMF_E1_KEY = "emf:E1"
+const val EMF_R1_KEY = "emf:r1"
+const val EMF_E2_KEY = "emf:E2"
+const val EMF_R2_KEY = "emf:r2"
+const val EMF_E3_KEY = "emf:E3"
+const val EMF_R3_KEY = "emf:r3"
+const val EMF_E_AVG_KEY = "emf:Eavg"
+const val EMF_R_AVG_KEY = "emf:ravg"
 
 private fun parseCell(inputs: Map<String, String>, task: ChallengeTask, row: Int, column: Int): Float? =
     inputs[challengeCellKey(task, row, column)]?.trim()?.replace(',', '.')?.toFloatOrNull()
@@ -579,6 +624,138 @@ fun evaluateChallenge(
                     statuses[1].contains("正常发光") &&
                     statuses[2].contains("亮度高"),
             )
+        }
+
+        ChallengeTask.CAPACITOR_CHARGE -> {
+            checks += ChallengeCheck(
+                "接入电容和单刀双掷开关",
+                components.any { it.type == InstrumentType.CAPACITOR } &&
+                    components.any { it.type == InstrumentType.SPDT_SWITCH },
+            )
+            checks += ChallengeCheck(
+                "接入电源、电阻和电表",
+                components.any { it.type.isPowerSource } &&
+                    components.any { it.type == InstrumentType.RESISTOR || it.type == InstrumentType.RESISTANCE_BOX } &&
+                    components.any { it.type == InstrumentType.VOLTMETER } &&
+                    components.any { it.type == InstrumentType.GALVANOMETER },
+            )
+            val rows = (0..5).map { row ->
+                Triple(
+                    parseCell(inputs, task, row, 0),
+                    parseCell(inputs, task, row, 1),
+                    parseCell(inputs, task, row, 2),
+                )
+            }
+            if (rows.any { it.first == null || it.second == null || it.third == null }) {
+                checks += ChallengeCheck("六行充放电数据完整", false)
+            } else {
+                val uc = rows.map { it.second!! }
+                val current = rows.map { abs(it.third!!) }
+                val signedCurrent = rows.map { it.third!! }
+                checks += ChallengeCheck(
+                    "充电阶段电容电压逐渐升高",
+                    uc[0] < uc[1] && uc[1] < uc[2],
+                )
+                checks += ChallengeCheck(
+                    "放电阶段电容电压逐渐降低",
+                    uc[3] > uc[4] && uc[4] > uc[5],
+                )
+                checks += ChallengeCheck(
+                    "充电、放电电流均逐渐减小",
+                    current[0] > current[1] && current[1] > current[2] &&
+                        current[3] > current[4] && current[4] > current[5],
+                )
+                checks += ChallengeCheck(
+                    "充放电电流方向相反",
+                    signedCurrent[0] * signedCurrent[3] < 0f &&
+                        signedCurrent[1] * signedCurrent[4] < 0f &&
+                        signedCurrent[2] * signedCurrent[5] < 0f,
+                )
+            }
+            addConclusionCheck(task.table)
+        }
+
+        ChallengeTask.EMF_INTERNAL_RESISTANCE -> {
+            val source = components.firstOrNull { it.type == InstrumentType.BATTERY }
+            checks += ChallengeCheck("接入电池组", source != null)
+            checks += ChallengeCheck(
+                "电源规格已锁定",
+                source?.specLocked == true && source.internalResistanceHidden,
+            )
+            val rows = (0..5).map { row ->
+                Pair(
+                    parseCell(inputs, task, row, 0),
+                    parseCell(inputs, task, row, 1),
+                )
+            }
+            if (rows.any { it.first == null || it.second == null }) {
+                checks += ChallengeCheck("六组 U、I 数据完整", false)
+            } else {
+                val u = rows.map { it.first!! }
+                val i = rows.map { it.second!! }
+                checks += ChallengeCheck(
+                    "六组电流有明显变化",
+                    i.max() - i.min() > 0.02f,
+                )
+                fun pair(p: Int, q: Int): Pair<Float, Float>? {
+                    val denominator = i[q] - i[p]
+                    if (abs(denominator) < 0.005f) return null
+                    val r = (u[p] - u[q]) / denominator
+                    val e = u[p] + i[p] * r
+                    return e to r
+                }
+                val pairs = listOf(pair(0, 3), pair(1, 4), pair(2, 5))
+                if (pairs.any { it == null }) {
+                    checks += ChallengeCheck("三组联立数据有效", false)
+                } else {
+                    val expected = pairs.map { it!! }
+                    fun entered(key: String): Float? =
+                        inputs[key]?.trim()?.replace(',', '.')?.toFloatOrNull()
+                    val e1 = entered(EMF_E1_KEY)
+                    val r1 = entered(EMF_R1_KEY)
+                    val e2 = entered(EMF_E2_KEY)
+                    val r2 = entered(EMF_R2_KEY)
+                    val e3 = entered(EMF_E3_KEY)
+                    val r3 = entered(EMF_R3_KEY)
+                    val eAvg = entered(EMF_E_AVG_KEY)
+                    val rAvg = entered(EMF_R_AVG_KEY)
+                    checks += ChallengeCheck(
+                        "三组 E、r 计算结果填写完整",
+                        listOf(e1, r1, e2, r2, e3, r3, eAvg, rAvg).all { it != null },
+                    )
+                    if (listOf(e1, r1, e2, r2, e3, r3).all { it != null }) {
+                        checks += ChallengeCheck(
+                            "三组 E、r 与公式结果一致",
+                            abs(e1!! - expected[0].first) <= 0.15f &&
+                                abs(r1!! - expected[0].second) <= 0.05f &&
+                                abs(e2!! - expected[1].first) <= 0.15f &&
+                                abs(r2!! - expected[1].second) <= 0.05f &&
+                                abs(e3!! - expected[2].first) <= 0.15f &&
+                                abs(r3!! - expected[2].second) <= 0.05f,
+                        )
+                    }
+                    if (eAvg != null && rAvg != null && listOf(e1, r1, e2, r2, e3, r3).all { it != null }) {
+                        val expectedEAvg = (e1!! + e2!! + e3!!) / 3f
+                        val expectedRAvg = (r1!! + r2!! + r3!!) / 3f
+                        checks += ChallengeCheck(
+                            "平均值填写正确",
+                            abs(eAvg - expectedEAvg) <= 0.08f &&
+                                abs(rAvg - expectedRAvg) <= 0.04f,
+                        )
+                    }
+                    if (source != null) {
+                        val truthE = source.voltage
+                        val truthR = source.internalResistanceOhm
+                        val avgE = expected.map { it.first }.average().toFloat()
+                        val avgR = expected.map { it.second }.average().toFloat()
+                        checks += ChallengeCheck(
+                            "测量结果接近电源真实值",
+                            abs(avgE - truthE) <= max(0.15f, truthE * 0.03f) &&
+                                abs(avgR - truthR) <= max(0.06f, truthR * 0.10f),
+                        )
+                    }
+                }
+            }
         }
     }
 

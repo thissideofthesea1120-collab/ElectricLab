@@ -59,11 +59,28 @@ fun MeterZoomDialog(
     solution: CircuitSolution,
     showReadings: Boolean,
 ) {
+    if (component.type == InstrumentType.GALVANOMETER) {
+        GalvanometerZoomDialog(editor, component, solution, showReadings)
+        return
+    }
     val reading = solution.readings[component.id] ?: ComponentReading()
     val isAmmeter = component.type == InstrumentType.AMMETER
-    val unit = if (isAmmeter) "A" else "V"
-    val smallMax = if (isAmmeter) 0.6f else 3f
-    val largeMax = if (isAmmeter) 3f else 15f
+    val isMilliAmmeter = component.type == InstrumentType.MILLIAMMETER
+    val unit = when {
+        isAmmeter -> "A"
+        isMilliAmmeter -> "mA"
+        else -> "V"
+    }
+    val smallMax = when {
+        isAmmeter -> 0.6f
+        isMilliAmmeter -> 50f
+        else -> 3f
+    }
+    val largeMax = when {
+        isAmmeter -> 3f
+        isMilliAmmeter -> 500f
+        else -> 15f
+    }
     val activeRange = reading.meterRange.takeIf { it > 0f } ?: smallMax
     val activeIsLarge = activeRange > smallMax + 0.01f
     val activeValue = reading.meterSignedValue
@@ -237,8 +254,9 @@ fun MeterZoomDialog(
                             true,
                         )
 
-                        for (i in 0..30) {
-                            val fraction = i / 30f
+                        val scaleDivisions = if (isMilliAmmeter) 25 else 30
+                        for (i in 0..scaleDivisions) {
+                            val fraction = i / scaleDivisions.toFloat()
                             val angle = Math.toRadians((startAngle + sweepAngle * fraction).toDouble())
                             val dir = Offset(cos(angle).toFloat(), sin(angle).toFloat())
                             val major = i % 5 == 0
@@ -253,7 +271,7 @@ fun MeterZoomDialog(
                             )
                             if (!major) continue
                             val majorIndex = i / 5
-                            val majorFraction = majorIndex / 6f
+                            val majorFraction = majorIndex / (scaleDivisions / 5f)
                             val smallValue = smallMax * majorFraction
                             val largeValue = largeMax * majorFraction
                             val smallText = formatTick(smallValue, 1)
@@ -322,7 +340,11 @@ fun MeterZoomDialog(
                     ) {
                         Text(
                             if (showReadings) {
-                                "当前示数 ${if (isAmmeter) formatAmmeter(activeValue) else formatVoltmeter(activeValue)}" +
+                                "当前示数 " + when {
+                                    isAmmeter -> formatAmmeter(activeValue)
+                                    isMilliAmmeter -> "${formatNumber(activeValue)} mA"
+                                    else -> formatVoltmeter(activeValue)
+                                } +
                                     when {
                                         reading.meterNegativeOverRange -> " · 超出负刻度"
                                         reading.meterOverRange -> " · 超测量范围"
@@ -341,7 +363,11 @@ fun MeterZoomDialog(
                         )
                         Text(
                             "测量范围 -${formatNumber(activeRange / 6f)}～${formatNumber(activeRange)} $unit · 每小格 " +
-                                String.format(java.util.Locale.US, "%.2f $unit", activeRange / 30f),
+                                String.format(
+                                    java.util.Locale.US,
+                                    "%.2f $unit",
+                                    if (isMilliAmmeter) activeRange / 25f else activeRange / 30f,
+                                ),
                             color = LabColors.InkFaint,
                             fontSize = 9.sp,
                         )
@@ -403,7 +429,7 @@ fun MeterZoomDialog(
                                         kotlin.math.abs(entered - activeValue) <= tolerance -> {
                                             feedback = "读数正确，观察得很仔细，继续保持！"
                                             feedbackCorrect = true
-                                            editor.grantChallengeDataEntry()
+                                            editor.grantChallengeDataEntry(component.type)
                                         }
                                         else -> {
                                             feedback = "别灰心，再看一眼指针位置，你可以读对的！"
@@ -436,7 +462,42 @@ fun MeterZoomDialog(
                                 modifier = Modifier.padding(top = 3.dp),
                             )
                         }
-                        if (feedbackCorrect) {
+                        if (feedbackCorrect && !editor.challengeActive) {
+                            Surface(
+                                onClick = {
+                                    val volts = editor.components
+                                        .filter { it.type == InstrumentType.VOLTMETER }
+                                        .mapNotNull { solution.readings[it.id]?.meterSignedValue }
+                                    val amps = editor.components
+                                        .filter { it.type == InstrumentType.AMMETER }
+                                        .mapNotNull { solution.readings[it.id]?.meterSignedValue }
+                                    editor.addRecord(
+                                        MeasurementRecord(
+                                            createdAt = System.currentTimeMillis(),
+                                            sourceVoltage = solution.batteryVoltage,
+                                            totalCurrent = solution.totalCurrent,
+                                            voltmeterValues = volts,
+                                            ammeterValues = amps,
+                                        ),
+                                    )
+                                    recorded = true
+                                    editor.notify("已记录到电压 / 电流记录表")
+                                },
+                                shape = RoundedCornerShape(9.dp),
+                                color = LabColors.Green.copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    LabColors.Green.copy(alpha = 0.45f),
+                                ),
+                            ) {
+                                Text(
+                                    "记录到表格",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    color = LabColors.Green,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                             if (recorded) {
                                 Text(
                                     "已记录到电压 / 电流记录表",
@@ -444,42 +505,6 @@ fun MeterZoomDialog(
                                     fontSize = 9.5.sp,
                                     modifier = Modifier.padding(top = 3.dp),
                                 )
-                            } else {
-                                Surface(
-                                    onClick = {
-                                        val volts = editor.components
-                                            .filter { it.type == InstrumentType.VOLTMETER }
-                                            .mapNotNull { solution.readings[it.id]?.meterSignedValue }
-                                        val amps = editor.components
-                                            .filter { it.type == InstrumentType.AMMETER }
-                                            .mapNotNull { solution.readings[it.id]?.meterSignedValue }
-                                        editor.addRecord(
-                                            MeasurementRecord(
-                                                createdAt = System.currentTimeMillis(),
-                                                sourceVoltage = solution.batteryVoltage,
-                                                totalCurrent = solution.totalCurrent,
-                                                voltmeterValues = volts,
-                                                ammeterValues = amps,
-                                            ),
-                                        )
-                                        recorded = true
-                                        editor.notify("已记录到电压 / 电流记录表")
-                                    },
-                                    shape = RoundedCornerShape(9.dp),
-                                    color = LabColors.Green.copy(alpha = 0.15f),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        LabColors.Green.copy(alpha = 0.45f),
-                                    ),
-                                ) {
-                                    Text(
-                                        "记录到表格",
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        color = LabColors.Green,
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
                             }
                         }
                     }
@@ -493,5 +518,217 @@ private fun formatTick(value: Float, decimals: Int): String {
         value.toInt().toString()
     } else {
         String.format(java.util.Locale.US, "%.${decimals}f", value)
+    }
+}
+
+@Composable
+private fun GalvanometerZoomDialog(
+    editor: LabEditorState,
+    component: PlacedInstrument,
+    solution: CircuitSolution,
+    showReadings: Boolean,
+) {
+    val reading = solution.readings[component.id] ?: ComponentReading()
+    val range = 300f
+    val tolerance = 5f
+    val activeValue = reading.meterSignedValue
+    var answer by remember(component.id) { mutableStateOf("") }
+    var feedback by remember(component.id) { mutableStateOf<String?>(null) }
+    var feedbackCorrect by remember(component.id) { mutableStateOf(false) }
+
+    BackHandler { editor.closeMeterZoom() }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.66f))
+            .clickable { editor.closeMeterZoom() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(max = 680.dp)
+                .fillMaxWidth(0.90f)
+                .height(if (showReadings) 320.dp else 360.dp)
+                .pointerInput(Unit) { detectTapGestures { } },
+            shape = RoundedCornerShape(24.dp),
+            color = LabColors.Surface.copy(alpha = 0.98f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, LabColors.Outline),
+            shadowElevation = 24.dp,
+        ) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(LabColors.Primary.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("G", color = LabColors.Primary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "灵敏电流计 · 放大刻度",
+                            color = LabColors.Ink,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "−300 μA ～ 0 ～ +300 μA · 每小格 20 μA",
+                            color = LabColors.InkFaint,
+                            fontSize = 10.sp,
+                        )
+                    }
+                    Surface(
+                        onClick = { editor.closeMeterZoom() },
+                        shape = RoundedCornerShape(10.dp),
+                        color = LabColors.SurfaceHigh,
+                    ) {
+                        Text(
+                            "关闭",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                            color = LabColors.InkMuted,
+                            fontSize = 10.5.sp,
+                        )
+                    }
+                }
+
+                Canvas(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val cx = w / 2f
+                    val cy = h * 0.72f
+                    val radius = minOf(w * 0.36f, h * 0.56f)
+                    val startAngle = 200f
+                    val sweepAngle = 140f
+                    val centerAngle = 270f
+                    drawArc(
+                        color = Color(0xFFEADFC8),
+                        startAngle = startAngle,
+                        sweepAngle = sweepAngle,
+                        useCenter = false,
+                        topLeft = Offset(cx - radius, cy - radius),
+                        size = Size(radius * 2f, radius * 2f),
+                        style = Stroke(3.2f * density, cap = StrokeCap.Round),
+                    )
+                    for (i in 0..30) {
+                        val angle = Math.toRadians((startAngle + sweepAngle * i / 30f).toDouble())
+                        val dir = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+                        val major = i % 5 == 0
+                        val inner = radius - (if (major) 10f else 4.5f) * density
+                        val outer = radius + (if (major) 10f else 4.5f) * density
+                        drawLine(
+                            Color(0xFF4F412C),
+                            Offset(cx + dir.x * inner, cy + dir.y * inner),
+                            Offset(cx + dir.x * outer, cy + dir.y * outer),
+                            (if (major) 1.5f else 0.8f) * density,
+                            StrokeCap.Round,
+                        )
+                        if (major) {
+                            val value = -range + range * 2f * i / 30f
+                            textLabel(
+                                if (i == 15) "0" else if (value > 0) "+${value.toInt()}" else value.toInt().toString(),
+                                cx + dir.x * (radius + 24f * density),
+                                cy + dir.y * (radius + 24f * density),
+                                8.5f * density,
+                                if (i == 15) LabColors.Primary else Color(0xFF6B5A3D),
+                                true,
+                            )
+                        }
+                    }
+                    val fraction = (activeValue / range).coerceIn(-1f, 1f)
+                    val needleAngle = Math.toRadians((centerAngle + fraction * sweepAngle / 2f).toDouble())
+                    val dir = Offset(cos(needleAngle).toFloat(), sin(needleAngle).toFloat())
+                    drawLine(
+                        Color(0xFFD83942),
+                        Offset(cx, cy),
+                        Offset(cx + dir.x * (radius - 4f * density), cy + dir.y * (radius - 4f * density)),
+                        1.7f * density,
+                        StrokeCap.Round,
+                    )
+                    drawCircle(Color(0xFF4B3520), 11f * density, Offset(cx, cy))
+                    drawCircle(Color(0xFFD7C39D), 8.3f * density, Offset(cx, cy))
+                    drawCircle(Color(0xFF2A2118), 3.5f * density, Offset(cx, cy))
+                    textLabel("μA", cx, cy - 26f * density, 22f * density, Color(0xFF4F412C), true)
+                }
+
+                Text(
+                    if (showReadings) {
+                        "当前示数 ${formatNumber(activeValue)} μA"
+                    } else {
+                        "读数开关已关闭，请读取中央零位指针"
+                    },
+                    color = if (reading.meterOverRange) LabColors.Red else LabColors.InkMuted,
+                    fontSize = 11.sp,
+                )
+                if (!showReadings) {
+                    Spacer(Modifier.height(5.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = answer,
+                            onValueChange = {
+                                answer = it
+                                feedback = null
+                                feedbackCorrect = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            label = { Text("输入读数（μA，左偏加 -）", fontSize = 10.sp) },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        )
+                        Surface(
+                            onClick = {
+                                val entered = answer.replace(',', '.').toFloatOrNull()
+                                when {
+                                    entered == null -> {
+                                        feedback = "先输入一个数字，再点验证。"
+                                        feedbackCorrect = false
+                                    }
+                                    kotlin.math.abs(entered - activeValue) <= tolerance -> {
+                                        feedback = "读数正确，中央零位判断正确！"
+                                        feedbackCorrect = true
+                                        editor.grantChallengeDataEntry(InstrumentType.GALVANOMETER)
+                                    }
+                                    else -> {
+                                        feedback = "再看一眼指针相对中央零位的位置。"
+                                        feedbackCorrect = false
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            color = LabColors.Primary.copy(alpha = 0.16f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LabColors.Primary.copy(alpha = 0.45f)),
+                        ) {
+                            Text(
+                                "验证",
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                color = LabColors.Primary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                    feedback?.let {
+                        Text(
+                            it,
+                            color = if (feedbackCorrect) LabColors.Green else LabColors.Amber,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }

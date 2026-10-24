@@ -8,8 +8,15 @@ enum class InstrumentCategory(val title: String, val subtitle: String, val short
     LOAD("用电器", "消耗电能", "用电"),
     METER("测量", "电流与电压", "测量"),
     CONTROL("控制与元件", "开关和电阻", "控制"),
+    DYNAMIC("动态元件", "电容与电感", "动态"),
     MAGNET("磁学", "磁场与电磁", "磁学"),
     WIRE("导线", "自由选择颜色", "导线"),
+}
+
+enum class MeterResistanceMode {
+    ANALOG,
+    DIGITAL,
+    HIGH_PRECISION,
 }
 
 enum class LampSpec(
@@ -115,6 +122,16 @@ enum class InstrumentType(
         listOf(Offset(-26f, 39f), Offset(0f, 39f), Offset(26f, 39f)),
         listOf("−", "3", "15"), "V",
     ),
+    GALVANOMETER(
+        "galvanometer", "灵敏电流计", InstrumentCategory.METER, 84f, 92f,
+        listOf(Offset(-26f, 39f), Offset(26f, 39f)),
+        listOf("−", "+"), "G",
+    ),
+    MILLIAMMETER(
+        "milliammeter", "毫安表", InstrumentCategory.METER, 84f, 92f,
+        listOf(Offset(-26f, 39f), Offset(0f, 39f), Offset(26f, 39f)),
+        listOf("−", "50", "500"), "mA",
+    ),
     SWITCH(
         "switch", "开关", InstrumentCategory.CONTROL, 100f, 54f,
         listOf(Offset(-35f, 13f), Offset(35f, 13f)),
@@ -127,6 +144,21 @@ enum class InstrumentType(
             Offset(-30f, -33f), Offset(30f, -33f),
         ),
         listOf("A", "B", "C", "D"), "R",
+    ),
+    SPDT_SWITCH(
+        "spdt_switch", "单刀双掷开关", InstrumentCategory.CONTROL, 112f, 66f,
+        listOf(Offset(0f, 24f), Offset(-44f, 24f), Offset(44f, 24f)),
+        listOf("中", "左", "右"), "S₂",
+    ),
+    CAPACITOR(
+        "capacitor", "电容", InstrumentCategory.DYNAMIC, 94f, 84f,
+        listOf(Offset(-24f, 38f), Offset(24f, 38f)),
+        listOf("+", "−"), "C",
+    ),
+    INDUCTOR(
+        "inductor", "电感", InstrumentCategory.DYNAMIC, 112f, 70f,
+        listOf(Offset(-48f, 30f), Offset(48f, 30f)),
+        listOf("1", "2"), "L",
     ),
     RESISTOR(
         "resistor", "定值电阻", InstrumentCategory.CONTROL, 110f, 44f,
@@ -210,6 +242,16 @@ data class PlacedInstrument(
     val rheostatMax: Float = 20f,
     val supplyVoltage: Float = 12f,
     val supplyAc: Boolean = false,
+    val internalResistanceEnabled: Boolean = false,
+    val internalResistanceOhm: Float = 0.1f,
+    val internalResistanceHidden: Boolean = false,
+    val specLocked: Boolean = false,
+    val meterResistanceEnabled: Boolean = false,
+    val meterResistanceMode: MeterResistanceMode = MeterResistanceMode.ANALOG,
+    val capacitanceUf: Float = 470f,
+    val inductanceMh: Float = 50f,
+    val inductanceDcResistance: Float = 2f,
+    val switchPosition: Int = 0,
     val storageVoltage: Float = 6f,
     val resistanceBoxValue: Int = 100,
     val wireSampleIndex: Int = 0,
@@ -228,6 +270,35 @@ data class PlacedInstrument(
         }
 
     val rheostatResistance: Float get() = slider.coerceIn(0f, 1f) * rheostatMax
+
+    val effectiveInternalResistance: Float
+        get() = if (internalResistanceEnabled) {
+            internalResistanceOhm.coerceIn(0.001f, 1f)
+        } else {
+            when (type) {
+                InstrumentType.STORAGE_BATTERY -> 0.05f
+                InstrumentType.POWER_SUPPLY -> 0.1f
+                else -> 0.08f
+            }
+        }
+
+    fun meterInternalResistance(terminal: Int): Float {
+        if (type == InstrumentType.GALVANOMETER) return 50f
+        if (type == InstrumentType.MILLIAMMETER) return 5f
+        val analog = if (type == InstrumentType.AMMETER) {
+            if (terminal == 2) 0.05f else 0.1f
+        } else {
+            if (terminal == 2) 15_000f else 3_000f
+        }
+        if (!meterResistanceEnabled) {
+            return if (type == InstrumentType.AMMETER) 0.01f else if (terminal == 2) 5_000_000f else 1_000_000f
+        }
+        return when (meterResistanceMode) {
+            MeterResistanceMode.ANALOG -> analog
+            MeterResistanceMode.DIGITAL -> if (type == InstrumentType.AMMETER) 0.01f else 1_000_000f
+            MeterResistanceMode.HIGH_PRECISION -> if (type == InstrumentType.AMMETER) 0.001f else 10_000_000f
+        }
+    }
 
     val resistanceBoxResistance: Float get() = resistanceBoxValue.coerceIn(0, 9999).toFloat()
 
@@ -259,7 +330,10 @@ val InstrumentType.isMagnet: Boolean
     get() = this == InstrumentType.BAR_MAGNET || this == InstrumentType.HORSESHOE_MAGNET
 
 val InstrumentType.isMeter: Boolean
-    get() = this == InstrumentType.AMMETER || this == InstrumentType.VOLTMETER
+    get() = this == InstrumentType.AMMETER ||
+        this == InstrumentType.VOLTMETER ||
+        this == InstrumentType.GALVANOMETER ||
+        this == InstrumentType.MILLIAMMETER
 
 fun PlacedInstrument.ratedPower(): Float? = when (type) {
     InstrumentType.LAMP, InstrumentType.TEMP_LAMP -> lampSpec.ratedPower
@@ -312,6 +386,7 @@ data class ComponentReading(
 
 data class CircuitSolution(
     val status: CircuitStatus = CircuitStatus.NO_POWER,
+    val epoch: Long = 0L,
     val batteryVoltage: Float = 0f,
     val totalCurrent: Float = 0f,
     val readings: Map<Long, ComponentReading> = emptyMap(),
@@ -321,6 +396,27 @@ data class CircuitSolution(
     val reversedMeters: Set<Long> = emptySet(),
     val overRangeMeters: Set<Long> = emptySet(),
     val negativeOverRangeMeters: Set<Long> = emptySet(),
+    val capacitorVoltages: Map<Long, Float> = emptyMap(),
+    val inductorCurrents: Map<Long, Float> = emptyMap(),
+)
+
+data class DynamicState(
+    val capacitorVoltages: Map<Long, Float> = emptyMap(),
+    val inductorCurrents: Map<Long, Float> = emptyMap(),
+)
+
+data class TransientResult(
+    val solution: CircuitSolution,
+    val state: DynamicState,
+)
+
+private data class DynamicBranch(
+    val componentId: Long,
+    val a: String,
+    val b: String,
+    val isCapacitor: Boolean,
+    val conductance: Float,
+    val previous: Float,
 )
 
 internal class UnionFind {
@@ -391,17 +487,36 @@ private data class SourceBranch(
 fun simulateCircuit(
     components: List<PlacedInstrument>,
     wires: List<WireSegment>,
+    dynamicState: DynamicState? = null,
+    dt: Float = 0.05f,
+    epoch: Long = 0L,
 ): CircuitSolution {
     var hotPowers = emptyMap<Long, Float>()
-    var result = simulateCircuitOnce(components, wires, hotPowers)
+    var result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch)
     repeat(3) {
         val tempLamps = components.filter { it.type == InstrumentType.TEMP_LAMP }
         if (tempLamps.isEmpty()) return result
         hotPowers = tempLamps.associateWith { result.readings[it.id]?.power ?: 0f }
             .mapKeys { it.key.id }
-        result = simulateCircuitOnce(components, wires, hotPowers)
+        result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch)
     }
     return result
+}
+
+fun simulateTransientStep(
+    components: List<PlacedInstrument>,
+    wires: List<WireSegment>,
+    state: DynamicState,
+    dt: Float = 0.05f,
+): TransientResult {
+    val solution = simulateCircuit(components, wires, state, dt)
+    return TransientResult(
+        solution = solution,
+        state = DynamicState(
+            capacitorVoltages = solution.capacitorVoltages,
+            inductorCurrents = solution.inductorCurrents,
+        ),
+    )
 }
 
 private fun PlacedInstrument.lampResistance(hotPower: Float?): Float {
@@ -416,8 +531,11 @@ private fun simulateCircuitOnce(
     components: List<PlacedInstrument>,
     wires: List<WireSegment>,
     hotPowers: Map<Long, Float>,
+    dynamicState: DynamicState? = null,
+    dt: Float = 0.05f,
+    epoch: Long = 0L,
 ): CircuitSolution {
-    if (components.isEmpty()) return CircuitSolution()
+    if (components.isEmpty()) return CircuitSolution(epoch = epoch)
     val byId = components.associateBy { it.id }
     val uf = UnionFind()
 
@@ -442,6 +560,7 @@ private fun simulateCircuitOnce(
         val readings = components.associate { it.id to ComponentReading() }
         return CircuitSolution(
             status = CircuitStatus.NO_POWER,
+            epoch = epoch,
             readings = readings,
             hasBattery = components.any { it.type.isPowerSource },
             batteryVoltage = 0f,
@@ -493,6 +612,7 @@ private fun simulateCircuitOnce(
 
     val branches = mutableListOf<Branch>()
     val meterBranches = mutableListOf<MeterBranch>()
+    val dynamicBranches = mutableListOf<DynamicBranch>()
 
     fun addBranch(componentId: Long, a: String, bKey: String, resistance: Float) {
         if (resistance <= 0f) return
@@ -517,11 +637,7 @@ private fun simulateCircuitOnce(
         }
         when {
             component.type.isPowerSource -> {
-                val r = when (component.type) {
-                    InstrumentType.STORAGE_BATTERY -> 0.05f
-                    InstrumentType.POWER_SUPPLY -> 0.1f
-                    else -> 0.08f
-                }
+                val r = component.effectiveInternalResistance
                 val positive = if (component.polarityFlipped) t0 else t1
                 val negative = if (component.polarityFlipped) t1 else t0
                 addConductance(positive, negative, r)
@@ -539,23 +655,80 @@ private fun simulateCircuitOnce(
                 addBranch(component.id, t0, t1, component.lampResistance(hotPowers[component.id]))
 
             component.type == InstrumentType.RESISTOR ->
-                addBranch(component.id, t0, t1, component.resistance.coerceIn(1f, 100f))
+                addBranch(component.id, t0, t1, component.resistance.coerceIn(1f, 10_000f))
 
             component.type == InstrumentType.SWITCH ->
                 if (component.closed) addBranch(component.id, t0, t1, 0.001f)
 
             component.type == InstrumentType.AMMETER -> {
-                addBranch(component.id, t1, t0, 0.01f)
-                addBranch(component.id, t2, t0, 0.01f)
-                meterBranches += MeterBranch(component.id, 1, t1, t0, 0.01f, 0.6f)
-                meterBranches += MeterBranch(component.id, 2, t2, t0, 0.01f, 3f)
+                val r1 = component.meterInternalResistance(1)
+                val r2 = component.meterInternalResistance(2)
+                addBranch(component.id, t1, t0, r1)
+                addBranch(component.id, t2, t0, r2)
+                meterBranches += MeterBranch(component.id, 1, t1, t0, r1, 0.6f)
+                meterBranches += MeterBranch(component.id, 2, t2, t0, r2, 3f)
             }
 
             component.type == InstrumentType.VOLTMETER -> {
-                addBranch(component.id, t1, t0, 1_000_000f)
-                addBranch(component.id, t2, t0, 5_000_000f)
-                meterBranches += MeterBranch(component.id, 1, t1, t0, 1_000_000f, 3f)
-                meterBranches += MeterBranch(component.id, 2, t2, t0, 5_000_000f, 15f)
+                val r1 = component.meterInternalResistance(1)
+                val r2 = component.meterInternalResistance(2)
+                addBranch(component.id, t1, t0, r1)
+                addBranch(component.id, t2, t0, r2)
+                meterBranches += MeterBranch(component.id, 1, t1, t0, r1, 3f)
+                meterBranches += MeterBranch(component.id, 2, t2, t0, r2, 15f)
+            }
+
+            component.type == InstrumentType.GALVANOMETER -> {
+                val r = component.meterInternalResistance(1)
+                addBranch(component.id, t1, t0, r)
+                meterBranches += MeterBranch(component.id, 1, t1, t0, r, 300f)
+            }
+
+            component.type == InstrumentType.MILLIAMMETER -> {
+                val r = component.meterInternalResistance(1)
+                addBranch(component.id, t1, t0, r)
+                addBranch(component.id, t2, t0, r)
+                meterBranches += MeterBranch(component.id, 1, t1, t0, r, 50f)
+                meterBranches += MeterBranch(component.id, 2, t2, t0, r, 500f)
+            }
+
+            component.type == InstrumentType.SPDT_SWITCH -> {
+                val selected = when (component.switchPosition) {
+                    0 -> uf.find(terminalKey(component.id, 1))
+                    1 -> uf.find(terminalKey(component.id, 2))
+                    else -> null
+                }
+                if (selected != null) {
+                    addBranch(component.id, t0, selected, 0.001f)
+                }
+            }
+
+            component.type == InstrumentType.CAPACITOR -> {
+                if (dynamicState != null && dt > 0f) {
+                    val capacitance = (component.capacitanceUf * 1e-6f).coerceAtLeast(1e-9f)
+                    val g = capacitance / dt
+                    val previous = dynamicState.capacitorVoltages[component.id] ?: 0f
+                    addConductance(t0, t1, dt / capacitance)
+                    addCurrent(t1, t0, (g * previous).toDouble())
+                    dynamicBranches += DynamicBranch(
+                        component.id, t0, t1, true, g, previous,
+                    )
+                }
+            }
+
+            component.type == InstrumentType.INDUCTOR -> {
+                if (dynamicState != null && dt > 0f) {
+                    val inductance = (component.inductanceMh * 1e-3f).coerceAtLeast(1e-6f)
+                    val g = dt / inductance
+                    val previous = dynamicState.inductorCurrents[component.id] ?: 0f
+                    addConductance(t0, t1, inductance / dt)
+                    addCurrent(t1, t0, previous.toDouble())
+                    dynamicBranches += DynamicBranch(
+                        component.id, t0, t1, false, g, previous,
+                    )
+                } else {
+                    addBranch(component.id, t0, t1, component.inductanceDcResistance.coerceAtLeast(0.01f))
+                }
             }
 
             component.type == InstrumentType.MOTOR -> addBranch(component.id, t0, t1, 12f)
@@ -640,7 +813,7 @@ private fun simulateCircuitOnce(
             t0
         }
 
-        if (component.type == InstrumentType.AMMETER || component.type == InstrumentType.VOLTMETER) {
+        if (component.type.isMeter) {
             val candidates = meterBranches.filter { it.componentId == component.id }
             fun terminalWired(terminal: Int): Boolean = wires.any {
                 (it.a.componentId == component.id && it.a.index == terminal) ||
@@ -655,16 +828,20 @@ private fun simulateCircuitOnce(
             } ?: candidates.first()
 
             val signedCurrent = (v(active.positive) - v(active.common)) / active.resistance
-            val rawValue = if (component.type == InstrumentType.AMMETER) {
-                signedCurrent
-            } else {
-                signedCurrent * active.resistance
+            val rawValue = when (component.type) {
+                InstrumentType.AMMETER -> signedCurrent
+                InstrumentType.MILLIAMMETER -> signedCurrent * 1000.0
+                InstrumentType.GALVANOMETER -> signedCurrent * 1_000_000.0
+                else -> signedCurrent * active.resistance
             }
             val value = kotlin.math.abs(rawValue).toFloat()
             val rangeLabel = when (component.type) {
                 InstrumentType.AMMETER -> if (active.range <= 0.6f) "0.6A" else "3A"
+                InstrumentType.MILLIAMMETER -> if (active.range <= 50f) "50mA" else "500mA"
+                InstrumentType.GALVANOMETER -> "±300μA"
                 else -> if (active.range <= 3f) "3V" else "15V"
             }
+            val isGalvanometer = component.type == InstrumentType.GALVANOMETER
             readings[component.id] = ComponentReading(
                 current = if (component.type == InstrumentType.AMMETER) {
                     value
@@ -679,9 +856,9 @@ private fun simulateCircuitOnce(
                 meterSignedValue = rawValue.toFloat(),
                 meterRange = active.range,
                 meterRangeLabel = rangeLabel,
-                meterOverRange = value > active.range * 1.02f,
-                meterNegativeOverRange = rawValue < -active.range / 6f,
-                meterReversed = rawValue < -1e-9,
+                meterOverRange = value > active.range * (if (isGalvanometer) 1f else 1.02f),
+                meterNegativeOverRange = !isGalvanometer && rawValue < -active.range / 6f,
+                meterReversed = !isGalvanometer && rawValue < -1e-9,
                 meterTerminal = active.terminal,
             )
             continue
@@ -723,8 +900,34 @@ private fun simulateCircuitOnce(
         )
     }
 
+    val capacitorVoltages = linkedMapOf<Long, Float>()
+    val inductorCurrents = linkedMapOf<Long, Float>()
+    for (branch in dynamicBranches) {
+        val voltage = v(branch.a) - v(branch.b)
+        val current = if (branch.isCapacitor) {
+            branch.conductance * (voltage.toFloat() - branch.previous)
+        } else {
+            branch.previous + branch.conductance * voltage.toFloat()
+        }
+        readings[branch.componentId] = ComponentReading(
+            current = kotlin.math.abs(current),
+            signedCurrent = current,
+            voltage = kotlin.math.abs(voltage).toFloat(),
+            power = kotlin.math.abs(voltage * current).toFloat(),
+            energized = kotlin.math.abs(current) > 0.00001f,
+        )
+        if (branch.isCapacitor) {
+            capacitorVoltages[branch.componentId] = voltage.toFloat()
+        } else {
+            inductorCurrents[branch.componentId] = current
+        }
+    }
+
     val total = kotlin.math.abs(totalBatteryCurrent).toFloat()
-    val closed = total > 0.001f
+    val hasLoopCurrent = readings.values.any {
+        kotlin.math.abs(it.signedCurrent) > 0.000001f
+    }
+    val closed = total > 0.000001f || hasLoopCurrent
     val shortedSources = sources.filter { source ->
         val reading = readings[source.id] ?: return@filter false
         reading.current > 8f ||
@@ -758,7 +961,8 @@ private fun simulateCircuitOnce(
             ) {
                 newlyDamaged += component.id
                 overRangeMeters += component.id
-            } else if (reading != null && reading.meterRange > 0f &&
+            } else if (component.type != InstrumentType.GALVANOMETER &&
+                reading != null && reading.meterRange > 0f &&
                 reading.meterSignedValue < -reading.meterRange / 6f
             ) {
                 newlyDamaged += component.id
@@ -783,6 +987,7 @@ private fun simulateCircuitOnce(
 
     return CircuitSolution(
         status = status,
+        epoch = epoch,
         batteryVoltage = sources.first().voltage,
         totalCurrent = total,
         readings = readings,
@@ -792,6 +997,8 @@ private fun simulateCircuitOnce(
         reversedMeters = reversedMeters,
         overRangeMeters = overRangeMeters,
         negativeOverRangeMeters = negativeOverRangeMeters,
+        capacitorVoltages = capacitorVoltages,
+        inductorCurrents = inductorCurrents,
     )
 }
 

@@ -14,10 +14,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -30,12 +35,47 @@ import java.util.Locale
 @Composable
 fun SnapshotDialog(
     snapshots: List<SavedSnapshot>,
-    onSave: () -> Unit,
+    onSave: (String) -> Unit,
     onLoad: (SavedSnapshot) -> Unit,
     onDelete: (SavedSnapshot) -> Unit,
     onClose: () -> Unit,
 ) {
     val formatter = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
+    val defaultName = "实验 " + formatter.format(Date())
+    var naming by remember { mutableStateOf(false) }
+    var snapshotName by remember { mutableStateOf(defaultName) }
+    if (naming) {
+        AlertDialog(
+            onDismissRequest = { naming = false },
+            title = { Text("命名实验快照", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = snapshotName,
+                    onValueChange = { snapshotName = it.take(30) },
+                    singleLine = true,
+                    label = { Text("快照名称") },
+                    placeholder = { Text(defaultName) },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onSave(snapshotName.trim().ifBlank { defaultName })
+                    naming = false
+                }) {
+                    Text("保存", color = LabColors.Primary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { naming = false }) {
+                    Text("取消", color = LabColors.InkMuted)
+                }
+            },
+            containerColor = LabColors.SurfaceRaised,
+            titleContentColor = LabColors.Ink,
+            textContentColor = LabColors.InkMuted,
+        )
+        return
+    }
     AlertDialog(
         onDismissRequest = onClose,
         title = {
@@ -56,7 +96,10 @@ fun SnapshotDialog(
                 verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 Surface(
-                    onClick = onSave,
+                    onClick = {
+                        snapshotName = defaultName
+                        naming = true
+                    },
                     shape = RoundedCornerShape(10.dp),
                     color = LabColors.Primary.copy(alpha = 0.14f),
                     border = androidx.compose.foundation.BorderStroke(

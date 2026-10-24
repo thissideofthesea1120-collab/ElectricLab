@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -54,10 +55,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
@@ -70,7 +73,9 @@ import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.Selection
 import com.physlab.electric.model.WireColor
 import com.physlab.electric.model.WireSegment
+import com.physlab.electric.model.DynamicState
 import com.physlab.electric.model.simulateCircuit
+import com.physlab.electric.model.simulateTransientStep
 import com.physlab.electric.ui.render.InstrumentVisual
 import com.physlab.electric.ui.render.drawInstrument
 import com.physlab.electric.ui.render.formatAmmeter
@@ -86,11 +91,49 @@ fun LabApp(
 ) {
     val rememberedEditor = remember { LabEditorState() }
     val editor = editorOverride ?: rememberedEditor
-    val solution = remember(editor.components, editor.wires, editor.fadingWireId) {
-        val activeWires = editor.fadingWireId?.let { rewiredId ->
-            editor.wires.filterNot { it.id == rewiredId }
-        } ?: editor.wires
-        simulateCircuit(editor.components, activeWires)
+    val dynamicState = remember { androidx.compose.runtime.mutableStateOf(DynamicState()) }
+    val activeWires = editor.fadingWireId?.let { rewiredId ->
+        editor.wires.filterNot { it.id == rewiredId }
+    } ?: editor.wires
+    val hasDynamic = editor.components.any {
+        it.type == InstrumentType.CAPACITOR || it.type == InstrumentType.INDUCTOR
+    }
+    val dynamicTopology = editor.components.map {
+        listOf(it.id, it.type.ordinal, it.capacitanceUf, it.inductanceMh)
+    } + editor.wires.map { listOf(it.a.componentId, it.a.index, it.b.componentId, it.b.index) }
+    LaunchedEffect(dynamicTopology, editor.topologyEpoch) {
+        dynamicState.value = DynamicState()
+    }
+    LaunchedEffect(hasDynamic, dynamicTopology) {
+        if (!hasDynamic) {
+            dynamicState.value = DynamicState()
+            return@LaunchedEffect
+        }
+        while (true) {
+            delay(50)
+            if (editor.challengeTimerPaused) continue
+            val wires = editor.fadingWireId?.let { rewiredId ->
+                editor.wires.filterNot { it.id == rewiredId }
+            } ?: editor.wires
+            dynamicState.value = simulateTransientStep(
+                components = editor.components,
+                wires = wires,
+                state = dynamicState.value,
+                dt = 0.05f,
+            ).state
+        }
+    }
+    val solution = remember(editor.components, editor.wires, editor.fadingWireId, dynamicState.value) {
+        simulateCircuit(editor.components, activeWires, dynamicState.value, 0.05f, editor.topologyEpoch)
+    }
+    LaunchedEffect(solution.readings, editor.challengeActive) {
+        editor.startCapacitorTimerIfNeeded(solution)
+    }
+    LaunchedEffect(editor.challengeActive, editor.challengeTimerRunning, editor.challengeTimerPaused) {
+        while (editor.challengeActive && editor.challengeTimerRunning && !editor.challengeTimerPaused) {
+            delay(50)
+            editor.advanceChallengeTimer(50)
+        }
     }
     var boardOrigin by remember { mutableStateOf(Offset.Zero) }
     var dragType by remember { mutableStateOf<InstrumentType?>(null) }
@@ -153,7 +196,8 @@ fun LabApp(
         if (editor.challengeActive) showReadings = false
     }
 
-    LaunchedEffect(solution.newlyDamaged) {
+    LaunchedEffect(solution.newlyDamaged, solution.epoch, editor.topologyEpoch) {
+        if (solution.epoch != editor.topologyEpoch) return@LaunchedEffect
         if (solution.newlyDamaged.isNotEmpty()) {
             editor.applyDamage(
                 solution.newlyDamaged,
@@ -164,7 +208,8 @@ fun LabApp(
         }
     }
 
-    LaunchedEffect(solution.reversedMeters, solution.newlyDamaged) {
+    LaunchedEffect(solution.reversedMeters, solution.newlyDamaged, solution.epoch, editor.topologyEpoch) {
+        if (solution.epoch != editor.topologyEpoch) return@LaunchedEffect
         val reversedHealthy = solution.reversedMeters - solution.newlyDamaged
         if (reversedHealthy.isNotEmpty()) {
             val names = editor.components
@@ -203,14 +248,19 @@ fun LabApp(
             .fillMaxSize()
             .background(LabColors.Background),
     ) {
-        val compact = maxWidth < 860.dp
-        val tiny = maxWidth < 700.dp
+        val compact = maxWidth < 860.dp || maxHeight > maxWidth
+        val tiny = maxWidth < 700.dp || maxHeight > maxWidth
+        val portrait = maxHeight > maxWidth
+        LaunchedEffect(portrait) {
+            if (portrait && editor.libraryOpen) editor.updateLibraryOpen(false)
+        }
         Column(Modifier.fillMaxSize()) {
             EditorTopBar(
                 editor = editor,
                 solution = solution,
                 compact = compact,
                 tiny = tiny,
+                portrait = portrait,
                 showReadings = showReadings,
                 onToggleReadings = {
                     if (!editor.challengeActive) showReadings = !showReadings
@@ -434,18 +484,20 @@ fun LabApp(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(7.dp),
                     ) {
-                        HelpLine("1", "实验台默认是空的。可从左侧仪器库拖动或轻点仪器放置；也可用“实验模板”快速搭建串联、并联、伏安法、电磁铁或磁体实验；“更多 → 任务闯关”提供 13 个分级任务，自己连电路、填表、选结论并提交验证。")
+                        HelpLine("1", "实验台默认是空的。可从左侧仪器库拖动或轻点仪器放置；也可用“实验模板”快速搭建串联、并联、伏安法、电磁铁、磁体或电容充放电实验；“更多 → 任务闯关”提供 15 个分级任务，自己连电路、填表、选结论并提交验证。")
                         HelpLine("2", "任务闯关从空实验台开始，80 分即可通过并解锁下一关，100 分才能解锁下下关；每关最高分自动保存，覆盖更新不会丢失。闯关中禁止使用实验模板，读数按钮锁定，退出闯关需确认。")
-                        HelpLine("3", "仪器拖出后使用默认规格；长按仪器可查看详情并调整电池节数、灯泡规格、电源电压、变阻器最大阻值、绕线方向等。伏安法测电阻的未知定值电阻不显示阻值，也不能查看或修改规格。")
-                        HelpLine("4", "点击一个接线柱，再点击另一个接线柱即可接线，也可直接拖拽。电源、电流表、电压表有正负接线柱，接线要分清“+ / −”。如果新导线与其他导线交叉，会实时提示“导线交叉了”，请拖动导线调整走线。")
-                        HelpLine("5", "拖动已有导线的接线柱端点可改接，原支路会暂时断开；拖动导线中段可增加弯折。长按导线可换色、拉直或删除。开关单击闭合/断开，滑动变阻器可拖动上方滑片。")
-                        HelpLine("6", "点击电流表/电压表放大表盘：每个大格分 5 小格，0 左侧负刻度同样分 5 小格；指针超过正测量范围 1.2 倍或越过负刻度线会损坏。接反但未越过负刻度不会损坏，会提示对调接线柱。关闭“读数”后可输入读数验证。")
+                        HelpLine("3", "仪器拖出后使用默认规格；长按仪器可查看详情并调整电池节数、灯泡规格、电源电压与内阻、电表内阻、变阻器最大阻值、电容容量、电感量、绕线方向等。定值电阻规格包含 10 kΩ。伏安法测电阻的未知定值电阻不显示阻值，也不能查看或修改规格。")
+                        HelpLine("4", "点击一个接线柱，再点击另一个接线柱即可接线，也可直接拖拽。电源、电流表、电压表、灵敏电流计、毫安表有正负接线柱，接线要分清“+ / −”。单刀双掷开关的公共端接输入，两个掷端分别接充电和放电支路。如果新导线与其他导线交叉，会实时提示“导线交叉了”，请拖动导线调整走线。")
+                        HelpLine("5", "拖动已有导线的接线柱端点可改接，原支路会暂时断开；拖动导线中段可增加弯折。长按导线可换色、拉直或删除。开关单击闭合/断开；单刀双掷开关单击切换掷向；滑动变阻器可拖动上方滑片。")
+                        HelpLine("6", "点击电流表、电压表、灵敏电流计或毫安表可放大表盘：电流表/电压表每个大格分 5 小格；灵敏电流计为中央零位，每小格 20 μA；毫安表 50 mA 量程每小格 2 mA、500 mA 量程每小格 20 mA。关闭“读数”后可输入读数验证。指针超过正测量范围 1.2 倍或越过负刻度线会损坏；灵敏电流计允许正常反向偏转。")
                         HelpLine("7", "实验台上同时有电压表和滑动变阻器时，拖动滑片会自动显示小型透明电压表放大刻度，松手约 0.7 秒后自动消失，方便观察目标电压，不遮挡操作。")
                         HelpLine("8", "所有规格小灯泡的亮度都按实际功率统一显示，实际功率相同亮度就相同。电动机和蜂鸣器额定电压为 4.5 V；用电器超过额定功率 3 倍会损坏。测小灯泡电功率时，亮度通过下拉选项选择“亮度低 / 正常发光 / 亮度高”。")
                         HelpLine("9", "磁体可拖动绿色手柄旋转，长按可翻转 N/S 磁极；电源也可在长按面板中对调正负极。电磁铁/螺线管改变电流方向或绕线方向时磁场反向。右上角“磁场”开关显示磁感线。")
                         HelpLine("10", "双指拖动平移实验台，双指捏合/张开缩放（最大 1.5 倍）；“更多 → 复位实验台视图”可恢复。实验台纵向可布置区域已扩大。")
-                        HelpLine("11", "“更多 → 实验快照”可保存/加载仪器、导线、视图和记录；“电压 / 电流记录表”只在表盘读数验证正确后由用户选择记录。电阻丝实验板使用公共 1/2 接线柱，长按可切换样品。")
+                        HelpLine("11", "顶部“记录表”按钮在“闯关”左边，用于查看电压、电流记录；“更多 → 实验快照”可保存/加载仪器、导线、视图和记录。记录只在表盘读数验证正确后由用户选择记录。电阻丝实验板使用公共 1/2 接线柱，长按可切换样品。")
                         HelpLine("12", "新手引导第 4 步会缩到实验台右下角，按提示连接串联电路后点“提交验证”；通过后继续下一步。每一步右上角都有“跳过”，跳过前会弹窗确认。")
+                        HelpLine("13", "第 14 关电容充放电：第一次出现充电电流时开始计时；点击“记录本次数据”会暂停计时和动态仿真并自动填入时间，电压表验证后填 Uc，灵敏电流计验证后填 I，保存本行后恢复计时。")
+                        HelpLine("14", "关于页提供 GitHub 开源地址，可点击在浏览器中打开；应用本身仍然完全离线运行，不需要网络权限。")
                     }
                 },
                 confirmButton = {
@@ -512,27 +564,45 @@ fun LabApp(
         }
 
         if (editor.aboutOpen) {
+            val githubUrl = "https://github.com/thissideofthesea1120-collab/ElectricLab"
+            val uriHandler = LocalUriHandler.current
             AlertDialog(
                 onDismissRequest = { editor.updateAboutOpen(false) },
                 title = { Text("关于", fontWeight = FontWeight.Bold) },
                 text = {
                     Column(
                         Modifier
-                            .heightIn(max = 190.dp)
+                            .heightIn(max = 300.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("初中电学虚拟实验室  v2.1.13", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
-                        Text("适用于初中物理电学与电磁学启蒙实验。", fontSize = 12.sp)
-                        Text("界面遵循 Google Material 3；仪器均为 Canvas 矢量立体绘制，造型参考 2024 版人教版教材插图。", fontSize = 12.sp, lineHeight = 18.sp)
-                        Text("完全离线运行，不收集任何数据。", fontSize = 12.sp)
+                        Text("电学虚拟实验室  v2.3.0", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
+                        Text("适用于物理电学与电磁学启蒙实验。", fontSize = 12.sp)
                         Text(
-                            "感谢：梁文锋（杭州深度求索）、杨勇（海宁市安澜学校）、刘毅杰（第一师阿拉尔中学）",
+                            "本项目与市面上所有相关产品及其运营方没有任何隶属、合作、授权或背书关系。\n" +
+                                "本项目未使用任何第三方的插图、图标、音频、题库、界面截图或专有代码。\n" +
+                                "应用中的仪器图形由项目使用 Android Canvas 独立绘制，属于通用实验器材造型。\n" +
+                                "项目中使用的第三方开源库遵循各自许可证，详见构建依赖与 LICENSE。",
+                            fontSize = 10.5.sp,
+                            lineHeight = 16.sp,
+                        )
+                        Text("完全离线运行，不收集任何数据。", fontSize = 12.sp)
+                        Text("GitHub 开源地址", color = LabColors.Ink, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            githubUrl,
+                            color = LabColors.Primary,
+                            fontSize = 9.sp,
+                            lineHeight = 12.sp,
+                            textDecoration = TextDecoration.Underline,
+                            modifier = Modifier.fillMaxWidth().clickable { uriHandler.openUri(githubUrl) },
+                        )
+                        Text(
+                            "感谢：梁圣、MrYang、류이제",
                             color = LabColors.InkMuted,
                             fontSize = 10.5.sp,
                             lineHeight = 16.sp,
                         )
-                        Text("©️ 2026 马辉山", color = LabColors.InkMuted, fontSize = 11.sp)
+                        Text("©️ 2026 휘산", color = LabColors.InkMuted, fontSize = 11.sp)
                     }
                 },
                 confirmButton = {
@@ -579,12 +649,14 @@ fun LabApp(
         if (snapshotDialogOpen) {
             SnapshotDialog(
                 snapshots = snapshots,
-                onSave = {
+                onSave = { requestedName ->
                     if (editor.components.isEmpty()) {
                         editor.notify("实验台为空，暂时没有可保存的内容")
                     } else {
                         val now = System.currentTimeMillis()
-                        val name = "实验 " + SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(now))
+                        val name = requestedName.ifBlank {
+                            "实验 " + SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(now))
+                        }
                         val item = SavedSnapshot(
                             id = now,
                             createdAt = now,
@@ -688,6 +760,7 @@ private fun EditorTopBar(
     solution: CircuitSolution,
     compact: Boolean,
     tiny: Boolean,
+    portrait: Boolean,
     showReadings: Boolean,
     onToggleReadings: () -> Unit,
     showMagneticField: Boolean,
@@ -711,27 +784,21 @@ private fun EditorTopBar(
     ) {
         Row(
             Modifier
-                .fillMaxSize()
+                .fillMaxHeight()
+                .fillMaxWidth()
+                .then(
+                    if (portrait) {
+                        Modifier.horizontalScroll(rememberScrollState())
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(start = 10.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(LabColors.Primary.copy(alpha = 0.92f), LabColors.PrimaryDeep.copy(alpha = 0.9f)),
-                        ),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                LabIcon(LabIcon.LIGHTNING, Color(0xFF03202D), Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(9.dp))
             Column(Modifier.width(if (compact) 136.dp else 178.dp)) {
                 Text(
-                    if (tiny) "电学实验室" else "初中电学虚拟实验室",
+                    if (tiny) "电学虚拟实验室" else "电学虚拟实验室",
                     color = LabColors.Ink,
                     fontSize = if (compact) 14.sp else 16.sp,
                     fontWeight = FontWeight.Bold,
@@ -739,7 +806,7 @@ private fun EditorTopBar(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "2024 人教版 · 实物接线",
+                    "实物接线 · 电路仿真",
                     color = LabColors.InkFaint,
                     fontSize = 8.8.sp,
                     maxLines = 1,
@@ -758,8 +825,10 @@ private fun EditorTopBar(
                 Text("短路", color = LabColors.Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(if (portrait) Modifier.width(14.dp) else Modifier.weight(1f))
 
+            TopTextButton("记录表", onOpenRecords)
+            Spacer(Modifier.width(4.dp))
             DisplayToggle(
                 label = "闯关",
                 active = editor.challengeActive || editor.challengeOpen,
@@ -786,6 +855,13 @@ private fun EditorTopBar(
                 active = false,
                 accent = LabColors.Amber,
                 onClick = onClear,
+            )
+            Spacer(Modifier.width(4.dp))
+            DisplayToggle(
+                label = "静音",
+                active = buzzerMuted,
+                accent = LabColors.Amber,
+                onClick = onToggleBuzzer,
             )
             Spacer(Modifier.width(4.dp))
             TopAction(
@@ -835,22 +911,6 @@ private fun EditorTopBar(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("电压 / 电流记录表", fontSize = 12.sp) },
-                        leadingIcon = { LabIcon(LabIcon.INFO, LabColors.InkMuted, Modifier.size(16.dp)) },
-                        onClick = {
-                            menuOpen = false
-                            onOpenRecords()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (buzzerMuted) "蜂鸣器静音：开" else "蜂鸣器静音：关", fontSize = 12.sp) },
-                        leadingIcon = { LabIcon(LabIcon.INFO, LabColors.InkMuted, Modifier.size(16.dp)) },
-                        onClick = {
-                            menuOpen = false
-                            onToggleBuzzer()
-                        },
-                    )
-                    DropdownMenuItem(
                         text = { Text("复位实验台视图", fontSize = 12.sp) },
                         leadingIcon = { LabIcon(LabIcon.RESET, LabColors.InkMuted, Modifier.size(16.dp)) },
                         onClick = {
@@ -877,6 +937,24 @@ private fun EditorTopBar(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TopTextButton(label: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        color = LabColors.SurfaceRaised.copy(alpha = 0.5f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, LabColors.OutlineSoft),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            color = LabColors.InkMuted,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -1040,17 +1118,6 @@ private fun EmptyBoardHint(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier
-                .size(58.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(LabColors.Primary.copy(alpha = 0.08f))
-                .border(1.dp, LabColors.Primary.copy(alpha = 0.18f), RoundedCornerShape(18.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            LabIcon(LabIcon.LIGHTNING, LabColors.Primary.copy(alpha = 0.7f), Modifier.size(28.dp))
-        }
-        Spacer(Modifier.height(10.dp))
         Text("实验台是空的", color = LabColors.InkMuted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Text("选择一个实验开始，或从左侧仪器库自由搭建", color = LabColors.InkFaint, fontSize = 10.sp)
         Spacer(Modifier.height(10.dp))

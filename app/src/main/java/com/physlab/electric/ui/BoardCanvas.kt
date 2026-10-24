@@ -455,12 +455,25 @@ fun LabBoard(
                                     } else if (editor.specTargetId == downComponent.id) {
                                         // A long press already opened this instrument's spec dialog.
                                     } else if (downComponent.type == InstrumentType.AMMETER ||
-                                        downComponent.type == InstrumentType.VOLTMETER
+                                        downComponent.type == InstrumentType.VOLTMETER ||
+                                        downComponent.type == InstrumentType.GALVANOMETER ||
+                                        downComponent.type == InstrumentType.MILLIAMMETER
                                     ) {
                                         editor.openMeterZoom(downComponent.id)
                                     } else if (downComponent.type == InstrumentType.SWITCH) {
                                         editor.selectComponent(downComponent.id)
                                         editor.toggleSwitch(downComponent.id)
+                                    } else if (downComponent.type == InstrumentType.SPDT_SWITCH) {
+                                        editor.selectComponent(downComponent.id)
+                                        val localX = startDp.x - downComponent.center.x
+                                        editor.setSwitchPosition(
+                                            downComponent.id,
+                                            when {
+                                                localX < -18f -> 0
+                                                localX > 18f -> 1
+                                                else -> 2
+                                            },
+                                        )
                                     } else {
                                         editor.selectComponent(downComponent.id)
                                     }

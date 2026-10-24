@@ -40,6 +40,9 @@ data class InstrumentVisual(
     val rheostatMax: Float = 20f,
     val supplyVoltage: Float = 12f,
     val supplyAc: Boolean = false,
+    val capacitanceUf: Float = 470f,
+    val inductanceMh: Float = 50f,
+    val switchPosition: Int = 0,
     val storageVoltage: Float = 6f,
     val resistanceBoxValue: Int = 100,
     val wireSampleIndex: Int = 0,
@@ -82,7 +85,12 @@ fun DrawScope.drawInstrument(
             InstrumentType.LED -> drawLed(visual)
             InstrumentType.AMMETER -> drawMeter(visual, isAmmeter = true)
             InstrumentType.VOLTMETER -> drawMeter(visual, isAmmeter = false)
+            InstrumentType.MILLIAMMETER -> drawMeter(visual, isAmmeter = true)
+            InstrumentType.GALVANOMETER -> drawGalvanometerMeter(visual)
             InstrumentType.SWITCH -> drawSwitch(visual)
+            InstrumentType.SPDT_SWITCH -> drawSpdtSwitch(visual)
+            InstrumentType.CAPACITOR -> drawCapacitor(visual)
+            InstrumentType.INDUCTOR -> drawInductor(visual)
             InstrumentType.RHEOSTAT -> drawRheostat(visual)
             InstrumentType.RESISTOR -> drawResistor()
             InstrumentType.RESISTANCE_BOX -> drawResistanceBox(visual)
@@ -1010,6 +1018,24 @@ private fun DrawScope.drawMotor(visual: InstrumentVisual) {
 // Ammeter and voltmeter
 // ---------------------------------------------------------------------------
 
+private fun DrawScope.drawGalvanometerMeter(visual: InstrumentVisual) {
+    softShadow(0f, 44f, 39f, 6.5f, 0.55f)
+    surfacePanel(-39f, -40f, 39f, 37f, 8f, Color(0xFF343B47), Color(0xFF11151C), Color(0xFF07090C), 1.3f)
+    drawCircle(Color(0xFFEADFC8), 27f, Offset(0f, -4f))
+    drawCircle(Color(0xFF4B3520), 27f, Offset(0f, -4f), style = Stroke(1f))
+    drawLine(Color(0xFF6B5A3D), Offset(-21f, 3f), Offset(21f, 3f), 0.8f)
+    val fraction = (visual.meterFraction ?: 0f).coerceIn(-1f, 1f)
+    val angle = Math.toRadians((270.0 + fraction * 62.0))
+    val tip = Offset((cos(angle) * 22f).toFloat(), (-4f + (sin(angle) * 22f)).toFloat())
+    drawLine(Color(0xFFD83942), Offset(0f, 10f), tip, 1.5f, StrokeCap.Round)
+    drawCircle(Color(0xFF2A2118), 3f, Offset(0f, 10f))
+    textLabel("G", 0f, -18f, 13f, Color(0xFF4F412C), true)
+    textLabel("μA", 0f, 18f, 5.5f, Color(0xFF6B5A3D), true)
+    textLabel("−300       0       +300", 0f, 27f, 4.1f, Color(0xFF8D7B60), true)
+    bindingPost(-26f, 39f, Color(0xFF3A404B))
+    bindingPost(26f, 39f, Color(0xFF3A404B))
+}
+
 private fun DrawScope.drawMeter(visual: InstrumentVisual, isAmmeter: Boolean) {
     softShadow(0f, 44f, 39f, 6.5f, 0.55f)
     surfacePanel(-39f, -40f, 39f, 37f, 8f, Color(0xFF343B47), Color(0xFF11151C), Color(0xFF07090C), 1.3f)
@@ -1240,6 +1266,113 @@ private fun DrawScope.drawSwitch(visual: InstrumentVisual) {
     )
     drawCircle(Color(0xFF5A0A10), 5.2f, tip, style = Stroke(0.8f))
     textLabel("S", 0f, 31.5f, 5.6f, Color(0xFF8D7D63), true)
+}
+
+// ---------------------------------------------------------------------------
+// SPDT switch, capacitor, inductor
+// ---------------------------------------------------------------------------
+
+private fun DrawScope.drawSpdtSwitch(visual: InstrumentVisual) {
+    softShadow(0f, 30f, 48f, 6f, 0.52f)
+    drawRoundRect(
+        color = Color(0xFF12100D),
+        topLeft = Offset(-46f, -23f),
+        size = Size(92f, 52f),
+        cornerRadius = CornerRadius(9f, 9f),
+    )
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(Color(0xFFFFF9E9), Color(0xFFE3D8C1), Color(0xFFB2A58C)),
+            startY = -22f,
+            endY = 28f,
+        ),
+        topLeft = Offset(-44f, -21f),
+        size = Size(88f, 48f),
+        cornerRadius = CornerRadius(8f, 8f),
+    )
+    bindingPost(0f, 24f, Color(0xFF3A404B))
+    bindingPost(-44f, 24f, Color(0xFF3A404B))
+    bindingPost(44f, 24f, Color(0xFF3A404B))
+    val tip = when (visual.switchPosition) {
+        0 -> Offset(-40f, 12f)
+        1 -> Offset(40f, 12f)
+        else -> Offset(0f, 4f)
+    }
+    drawLine(Color(0xFF5B4E39), Offset(0f, 18f), tip, 4.6f, StrokeCap.Round)
+    drawCircle(
+        brush = Brush.radialGradient(listOf(Color(0xFFFF8A80), Color(0xFF8C161D)), center = tip, radius = 8f),
+        radius = 5f,
+        center = tip,
+    )
+    textLabel("左", -44f, 38f, 4.6f, Color(0xFF8D7D63), true)
+    textLabel("中", 0f, 38f, 4.6f, Color(0xFF8D7D63), true)
+    textLabel("右", 44f, 38f, 4.6f, Color(0xFF8D7D63), true)
+    textLabel("S₂", 0f, -14f, 5.2f, Color(0xFF8D7D63), true)
+}
+
+private fun DrawScope.drawCapacitor(visual: InstrumentVisual) {
+    softShadow(0f, 36f, 40f, 6f, 0.55f)
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(Color(0xFF253C58), Color(0xFF12243A), Color(0xFF0A1524)),
+            startY = -34f,
+            endY = 34f,
+        ),
+        topLeft = Offset(-30f, -32f),
+        size = Size(60f, 64f),
+        cornerRadius = CornerRadius(12f, 12f),
+    )
+    drawRoundRect(
+        color = Color(0xFF6FB8FF).copy(alpha = 0.35f),
+        topLeft = Offset(-24f, -26f),
+        size = Size(48f, 2f),
+        cornerRadius = CornerRadius(1f, 1f),
+    )
+    drawLine(Color(0xFFB9D9FF), Offset(-18f, -28f), Offset(-18f, 28f), 3f, StrokeCap.Round)
+    drawLine(Color(0xFFB9D9FF), Offset(18f, -28f), Offset(18f, 28f), 3f, StrokeCap.Round)
+    bindingPost(-24f, 38f, if (visual.polarityFlipped) Color(0xFFB9D9FF) else Color(0xFFD83942))
+    bindingPost(24f, 38f, if (visual.polarityFlipped) Color(0xFFD83942) else Color(0xFFB9D9FF))
+    textLabel("${visual.capacitanceUf.toInt()}µF", 0f, 4f, 6.4f, Color(0xFFEAF5FF), true)
+    textLabel(if (visual.polarityFlipped) "−" else "+", -24f, -45f, 5.4f,
+        if (visual.polarityFlipped) Color(0xFFB9D9FF) else Color(0xFFFFD36A), true)
+    textLabel(if (visual.polarityFlipped) "+" else "−", 24f, -45f, 5.4f,
+        if (visual.polarityFlipped) Color(0xFFFFD36A) else Color(0xFFB9D9FF), true)
+    textLabel("C", 0f, 49f, 5.8f, Color(0xFF7FC8FF), true)
+}
+
+private fun DrawScope.drawInductor(visual: InstrumentVisual) {
+    softShadow(0f, 28f, 50f, 5.5f, 0.55f)
+    drawRoundRect(
+        color = Color(0xFF2C2118),
+        topLeft = Offset(-48f, -25f),
+        size = Size(96f, 46f),
+        cornerRadius = CornerRadius(9f, 9f),
+    )
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(Color(0xFF9A6A3C), Color(0xFF5E3C23), Color(0xFF2A1A10)),
+            startY = -24f,
+            endY = 20f,
+        ),
+        topLeft = Offset(-45f, -22f),
+        size = Size(90f, 40f),
+        cornerRadius = CornerRadius(8f, 8f),
+    )
+    for (i in 0..3) {
+        drawArc(
+            color = Color(0xFFE3B26E),
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(-36f + i * 18f, -16f),
+            size = Size(18f, 24f),
+            style = Stroke(2.4f),
+        )
+    }
+    bindingPost(-48f, 30f, Color(0xFF3A404B))
+    bindingPost(48f, 30f, Color(0xFF3A404B))
+    textLabel("${visual.inductanceMh.toInt()}mH", 0f, 3f, 6.2f, Color(0xFFFFE2B8), true)
+    textLabel("L", 0f, 38f, 5.8f, Color(0xFFE3B26E), true)
 }
 
 // ---------------------------------------------------------------------------
