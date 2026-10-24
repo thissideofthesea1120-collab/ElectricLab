@@ -4,7 +4,7 @@
 
 - 应用名：**电学虚拟实验室**
 - 包名：`com.physlab.electric`
-- 版本：**2.2.0**（versionCode 40）
+- 版本：**2.2.1**（versionCode 41）
 - 支持：Android 6.0（API 23）及以上
 - 屏幕：强制横屏，自适应 640×360 到 1280×800
 - 完全离线，不申请网络权限
@@ -37,14 +37,14 @@ F-Droid 构建不需要仓库中的签名密钥；未提供 `keystore.properties
 ## 下载与安装
 
 ```text
-ElectricLab-v2.2.0-release.apk
-电学虚拟实验室-v2.2.0-release.apk
+ElectricLab-v2.2.1-release.apk
+电学虚拟实验室-v2.2.1-release.apk
 ```
 
 两个文件内容相同。覆盖安装：
 
 ```bat
-adb install -r 电学虚拟实验室-v2.2.0-release.apk
+adb install -r 电学虚拟实验室-v2.2.1-release.apk
 ```
 
 不要在更新时先卸载，否则会清除闯关进度和实验数据。
