@@ -461,6 +461,12 @@ fun LabBoard(
                                     } else if (downComponent.type == InstrumentType.SWITCH) {
                                         editor.selectComponent(downComponent.id)
                                         editor.toggleSwitch(downComponent.id)
+                                    } else if (downComponent.type == InstrumentType.SPDT_SWITCH) {
+                                        editor.selectComponent(downComponent.id)
+                                        editor.setSwitchPosition(
+                                            downComponent.id,
+                                            if (downComponent.switchPosition == 0) 1 else 0,
+                                        )
                                     } else {
                                         editor.selectComponent(downComponent.id)
                                     }

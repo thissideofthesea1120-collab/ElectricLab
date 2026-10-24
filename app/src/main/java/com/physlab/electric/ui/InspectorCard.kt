@@ -364,6 +364,21 @@ private fun ComponentInspector(
                 SpecText("放在磁体或通电线圈附近，会被吸引并靠近磁极；移开磁体后恢复原位")
             }
 
+            InstrumentType.SPDT_SWITCH -> {
+                Text("单刀双掷开关", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                SpecText(if (component.switchPosition == 0) "当前：1 接 2" else "当前：1 接 3")
+            }
+
+            InstrumentType.CAPACITOR -> {
+                Text("电容 ${formatNumber(component.capacitanceUf)} µF", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                SpecText("额定电压 16 V；充电后两端有电压")
+            }
+
+            InstrumentType.INDUCTOR -> {
+                Text("电感 ${formatNumber(component.inductanceMh)} mH", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                SpecText("直流电阻 ${formatNumber(component.inductanceDcResistance)} Ω")
+            }
+
             InstrumentType.AMMETER -> {
                 val range = reading?.meterRangeLabel?.ifBlank { "0.6A" } ?: "0.6A"
                 if (showReadings) {

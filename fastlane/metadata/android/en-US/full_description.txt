@@ -7,7 +7,10 @@ Features:
 • Circuit simulation for series, parallel, rheostats, motors, buzzers and LEDs
 • Meter reading practice with ranges, polarity, reversal and overload feedback
 • Experiment templates for common classroom demonstrations
-• 13 graded challenge tasks with data tables and conclusions
+• 15 graded challenge tasks with data tables and conclusions
+• Capacitors and inductors with charge/discharge observation
+• Selectable meter internal resistance (analog/digital/high precision)
+• Adjustable source internal resistance and AC/DC student supply
 • Magnets, solenoids, electromagnets and compass
 • Snapshots and measurement records
 

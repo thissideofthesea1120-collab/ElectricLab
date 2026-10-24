@@ -9,6 +9,7 @@ import com.physlab.electric.model.CircuitSolution
 import com.physlab.electric.model.InstrumentCategory
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.LampSpec
+import com.physlab.electric.model.MeterResistanceMode
 import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.Selection
 import com.physlab.electric.model.TerminalRef
@@ -756,6 +757,7 @@ class LabEditorState {
 
     fun setSupplyVoltage(id: Long, voltage: Float) {
         if (components.none { it.id == id && it.type == InstrumentType.POWER_SUPPLY }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
         components = components.map {
             if (it.id == id) it.copy(supplyVoltage = voltage.coerceIn(0f, 36f)) else it
         }
@@ -763,8 +765,71 @@ class LabEditorState {
 
     fun setSupplyAc(id: Long, ac: Boolean) {
         if (components.none { it.id == id && it.type == InstrumentType.POWER_SUPPLY }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
         components = components.map {
             if (it.id == id) it.copy(supplyAc = ac) else it
+        }
+    }
+
+    fun setInternalResistanceEnabled(id: Long, enabled: Boolean) {
+        if (components.none { it.id == id && it.type.isPowerSource }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(internalResistanceEnabled = enabled) else it
+        }
+    }
+
+    fun setInternalResistance(id: Long, ohms: Float) {
+        if (components.none { it.id == id && it.type.isPowerSource }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
+        components = components.map {
+            if (it.id == id) it.copy(internalResistanceOhm = ohms.coerceIn(0.1f, 1f)) else it
+        }
+    }
+
+    fun setMeterResistanceEnabled(id: Long, enabled: Boolean) {
+        if (components.none { it.id == id && it.type.isMeter }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(meterResistanceEnabled = enabled) else it
+        }
+    }
+
+    fun setMeterResistanceMode(id: Long, mode: MeterResistanceMode) {
+        if (components.none { it.id == id && it.type.isMeter }) return
+        components = components.map {
+            if (it.id == id) it.copy(meterResistanceMode = mode) else it
+        }
+    }
+
+    fun setCapacitance(id: Long, uf: Float) {
+        if (components.none { it.id == id && it.type == InstrumentType.CAPACITOR }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(capacitanceUf = uf) else it
+        }
+    }
+
+    fun setInductance(id: Long, mh: Float) {
+        if (components.none { it.id == id && it.type == InstrumentType.INDUCTOR }) return
+        pushHistory()
+        val dc = when (mh.toInt()) {
+            10 -> 1f
+            50 -> 2f
+            100 -> 4f
+            else -> 2f
+        }
+        components = components.map {
+            if (it.id == id) it.copy(inductanceMh = mh, inductanceDcResistance = dc) else it
+        }
+    }
+
+    fun setSwitchPosition(id: Long, position: Int) {
+        if (components.none { it.id == id && it.type == InstrumentType.SPDT_SWITCH }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(switchPosition = position.coerceIn(0, 1)) else it
         }
     }
 
@@ -802,6 +867,7 @@ class LabEditorState {
 
     fun setPolarityFlipped(id: Long, flipped: Boolean) {
         if (components.none { it.id == id }) return
+        if (components.firstOrNull { it.id == id }?.specLocked == true) return
         pushHistory()
         components = components.map {
             if (it.id == id) it.copy(polarityFlipped = flipped) else it
@@ -956,6 +1022,16 @@ class LabEditorState {
                     put("rheostatMax", component.rheostatMax)
                     put("supplyVoltage", component.supplyVoltage)
                     put("supplyAc", component.supplyAc)
+                    put("internalResistanceEnabled", component.internalResistanceEnabled)
+                    put("internalResistanceOhm", component.internalResistanceOhm)
+                    put("internalResistanceHidden", component.internalResistanceHidden)
+                    put("specLocked", component.specLocked)
+                    put("meterResistanceEnabled", component.meterResistanceEnabled)
+                    put("meterResistanceMode", component.meterResistanceMode.name)
+                    put("capacitanceUf", component.capacitanceUf)
+                    put("inductanceMh", component.inductanceMh)
+                    put("inductanceDcResistance", component.inductanceDcResistance)
+                    put("switchPosition", component.switchPosition)
                     put("storageVoltage", component.storageVoltage)
                     put("resistanceBoxValue", component.resistanceBoxValue)
                     put("wireSample", component.wireSampleIndex)
@@ -1033,7 +1109,19 @@ class LabEditorState {
                 slider = item.optDouble("slider", 0.5).toFloat().coerceIn(0f, 1f),
                 rheostatMax = item.optDouble("rheostatMax", 20.0).toFloat().coerceIn(1f, 100f),
                 supplyVoltage = item.optDouble("supplyVoltage", 12.0).toFloat().coerceIn(0f, 36f),
-                supplyAc = false,
+                supplyAc = item.optBoolean("supplyAc", false),
+                internalResistanceEnabled = item.optBoolean("internalResistanceEnabled", false),
+                internalResistanceOhm = item.optDouble("internalResistanceOhm", 0.1).toFloat().coerceIn(0.1f, 1f),
+                internalResistanceHidden = item.optBoolean("internalResistanceHidden", false),
+                specLocked = item.optBoolean("specLocked", false),
+                meterResistanceEnabled = item.optBoolean("meterResistanceEnabled", false),
+                meterResistanceMode = runCatching {
+                    MeterResistanceMode.valueOf(item.optString("meterResistanceMode", MeterResistanceMode.ANALOG.name))
+                }.getOrDefault(MeterResistanceMode.ANALOG),
+                capacitanceUf = item.optDouble("capacitanceUf", 470.0).toFloat(),
+                inductanceMh = item.optDouble("inductanceMh", 50.0).toFloat(),
+                inductanceDcResistance = item.optDouble("inductanceDcResistance", 2.0).toFloat(),
+                switchPosition = item.optInt("switchPosition", 0).coerceIn(0, 1),
                 storageVoltage = item.optDouble("storageVoltage", 6.0).toFloat(),
                 resistanceBoxValue = item.optInt("resistanceBoxValue", 100).coerceIn(0, 9999),
                 wireSampleIndex = item.optInt("wireSample", 0).coerceIn(0, 3),
@@ -1231,6 +1319,25 @@ class LabEditorState {
                 addInstrument(InstrumentType.TEMP_LAMP, Offset(boardWidth / 2f, boardHeight / 2f))
                 components.lastOrNull()?.let {
                     setLampSpec(it.id, LampSpec.entries.random())
+                }
+            }
+            ChallengeTarget.POWER_SOURCE -> {
+                addInstrument(InstrumentType.POWER_SUPPLY, Offset(boardWidth / 2f, boardHeight / 2f))
+                components.lastOrNull()?.let { source ->
+                    components = components.map {
+                        if (it.id == source.id) {
+                            it.copy(
+                                supplyVoltage = 3f,
+                                supplyAc = false,
+                                internalResistanceEnabled = true,
+                                internalResistanceOhm = (0.2f + 0.8f * kotlin.random.Random.nextFloat()),
+                                internalResistanceHidden = true,
+                                specLocked = true,
+                            )
+                        } else {
+                            it
+                        }
+                    }
                 }
             }
             null -> Unit
@@ -1653,6 +1760,9 @@ class LabEditorState {
             InstrumentType.HORSESHOE_MAGNET -> "磁体"
             InstrumentType.COMPASS -> "磁针"
             InstrumentType.PAPERCLIPS -> "回形针"
+            InstrumentType.SPDT_SWITCH -> "S₂"
+            InstrumentType.CAPACITOR -> "C"
+            InstrumentType.INDUCTOR -> "L"
         }
         var index = 1
         var candidate: String

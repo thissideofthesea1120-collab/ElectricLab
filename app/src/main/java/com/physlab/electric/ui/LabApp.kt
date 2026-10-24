@@ -70,7 +70,9 @@ import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.Selection
 import com.physlab.electric.model.WireColor
 import com.physlab.electric.model.WireSegment
+import com.physlab.electric.model.DynamicState
 import com.physlab.electric.model.simulateCircuit
+import com.physlab.electric.model.simulateTransientStep
 import com.physlab.electric.ui.render.InstrumentVisual
 import com.physlab.electric.ui.render.drawInstrument
 import com.physlab.electric.ui.render.formatAmmeter
@@ -86,11 +88,39 @@ fun LabApp(
 ) {
     val rememberedEditor = remember { LabEditorState() }
     val editor = editorOverride ?: rememberedEditor
-    val solution = remember(editor.components, editor.wires, editor.fadingWireId) {
-        val activeWires = editor.fadingWireId?.let { rewiredId ->
-            editor.wires.filterNot { it.id == rewiredId }
-        } ?: editor.wires
-        simulateCircuit(editor.components, activeWires)
+    val dynamicState = remember { androidx.compose.runtime.mutableStateOf(DynamicState()) }
+    val activeWires = editor.fadingWireId?.let { rewiredId ->
+        editor.wires.filterNot { it.id == rewiredId }
+    } ?: editor.wires
+    val hasDynamic = editor.components.any {
+        it.type == InstrumentType.CAPACITOR || it.type == InstrumentType.INDUCTOR
+    }
+    val dynamicTopology = editor.components.map {
+        listOf(it.id, it.type.ordinal, it.capacitanceUf, it.inductanceMh)
+    } + editor.wires.map { listOf(it.a.componentId, it.a.index, it.b.componentId, it.b.index) }
+    LaunchedEffect(dynamicTopology) {
+        dynamicState.value = DynamicState()
+    }
+    LaunchedEffect(hasDynamic, dynamicTopology) {
+        if (!hasDynamic) {
+            dynamicState.value = DynamicState()
+            return@LaunchedEffect
+        }
+        while (true) {
+            delay(50)
+            val wires = editor.fadingWireId?.let { rewiredId ->
+                editor.wires.filterNot { it.id == rewiredId }
+            } ?: editor.wires
+            dynamicState.value = simulateTransientStep(
+                components = editor.components,
+                wires = wires,
+                state = dynamicState.value,
+                dt = 0.05f,
+            ).state
+        }
+    }
+    val solution = remember(editor.components, editor.wires, editor.fadingWireId, dynamicState.value) {
+        simulateCircuit(editor.components, activeWires, dynamicState.value, 0.05f)
     }
     var boardOrigin by remember { mutableStateOf(Offset.Zero) }
     var dragType by remember { mutableStateOf<InstrumentType?>(null) }
@@ -434,7 +464,7 @@ fun LabApp(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(7.dp),
                     ) {
-                        HelpLine("1", "实验台默认是空的。可从左侧仪器库拖动或轻点仪器放置；也可用“实验模板”快速搭建串联、并联、伏安法、电磁铁或磁体实验；“更多 → 任务闯关”提供 13 个分级任务，自己连电路、填表、选结论并提交验证。")
+                        HelpLine("1", "实验台默认是空的。可从左侧仪器库拖动或轻点仪器放置；也可用“实验模板”快速搭建串联、并联、伏安法、电磁铁或磁体实验；“更多 → 任务闯关”提供 15 个分级任务，自己连电路、填表、选结论并提交验证。")
                         HelpLine("2", "任务闯关从空实验台开始，80 分即可通过并解锁下一关，100 分才能解锁下下关；每关最高分自动保存，覆盖更新不会丢失。闯关中禁止使用实验模板，读数按钮锁定，退出闯关需确认。")
                         HelpLine("3", "仪器拖出后使用默认规格；长按仪器可查看详情并调整电池节数、灯泡规格、电源电压、变阻器最大阻值、绕线方向等。伏安法测电阻的未知定值电阻不显示阻值，也不能查看或修改规格。")
                         HelpLine("4", "点击一个接线柱，再点击另一个接线柱即可接线，也可直接拖拽。电源、电流表、电压表有正负接线柱，接线要分清“+ / −”。如果新导线与其他导线交叉，会实时提示“导线交叉了”，请拖动导线调整走线。")
@@ -522,7 +552,7 @@ fun LabApp(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("电学虚拟实验室  v2.1.15", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
+                        Text("电学虚拟实验室  v2.2.0", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
                         Text("适用于物理电学与电磁学启蒙实验。", fontSize = 12.sp)
                         Text(
                             "本项目与市面上所有相关产品及其运营方没有任何隶属、合作、授权或背书关系。\n" +
@@ -767,6 +797,8 @@ private fun EditorTopBar(
 
             Spacer(Modifier.weight(1f))
 
+            TopTextButton("记录表", onOpenRecords)
+            Spacer(Modifier.width(4.dp))
             DisplayToggle(
                 label = "闯关",
                 active = editor.challengeActive || editor.challengeOpen,
@@ -842,14 +874,6 @@ private fun EditorTopBar(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("电压 / 电流记录表", fontSize = 12.sp) },
-                        leadingIcon = { LabIcon(LabIcon.INFO, LabColors.InkMuted, Modifier.size(16.dp)) },
-                        onClick = {
-                            menuOpen = false
-                            onOpenRecords()
-                        },
-                    )
-                    DropdownMenuItem(
                         text = { Text(if (buzzerMuted) "蜂鸣器静音：开" else "蜂鸣器静音：关", fontSize = 12.sp) },
                         leadingIcon = { LabIcon(LabIcon.INFO, LabColors.InkMuted, Modifier.size(16.dp)) },
                         onClick = {
@@ -884,6 +908,24 @@ private fun EditorTopBar(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TopTextButton(label: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        color = LabColors.SurfaceRaised.copy(alpha = 0.5f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, LabColors.OutlineSoft),
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            color = LabColors.InkMuted,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 

@@ -187,6 +187,9 @@ fun ChallengeDataTable(
             fontSize = 8.5.sp,
             modifier = Modifier.padding(top = 3.dp),
         )
+        if (task == ChallengeTask.EMF_INTERNAL_RESISTANCE) {
+            EmfCalculationPanel(editor, active)
+        }
         val conclusion = table.conclusion
         if (conclusion != null) {
             Spacer(Modifier.height(6.dp))
@@ -230,4 +233,54 @@ fun ChallengeDataTable(
             }
         }
     }
+}
+
+@Composable
+private fun EmfCalculationPanel(editor: LabEditorState, active: Boolean) {
+    Spacer(Modifier.height(5.dp))
+    Text(
+        "计算结果：用第 1/4、2/5、3/6 组分别联立求 E、r，再取平均值",
+        color = LabColors.Amber,
+        fontSize = 8.3.sp,
+        lineHeight = 11.sp,
+    )
+    val pairKeys = listOf(
+        Triple("第 1、4 组", EMF_E1_KEY, EMF_R1_KEY),
+        Triple("第 2、5 组", EMF_E2_KEY, EMF_R2_KEY),
+        Triple("第 3、6 组", EMF_E3_KEY, EMF_R3_KEY),
+        Triple("平均值", EMF_E_AVG_KEY, EMF_R_AVG_KEY),
+    )
+    for ((label, eKey, rKey) in pairKeys) {
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                label,
+                modifier = Modifier.width(58.dp),
+                color = LabColors.InkFaint,
+                fontSize = 8.sp,
+            )
+            ResultField(editor, eKey, "E/V", active, Modifier.weight(1f))
+            ResultField(editor, rKey, "r/Ω", active, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun ResultField(editor: LabEditorState, key: String, label: String, active: Boolean, modifier: Modifier) {
+    OutlinedTextField(
+        value = editor.challengeInputs[key].orEmpty(),
+        onValueChange = { if (active) editor.updateChallengeInput(key, it) },
+        modifier = modifier,
+        singleLine = true,
+        enabled = active,
+        textStyle = androidx.compose.ui.text.TextStyle(
+            color = LabColors.Ink,
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center,
+        ),
+        placeholder = { Text(label, color = LabColors.InkFaint, fontSize = 8.sp) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+    )
 }
