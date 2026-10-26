@@ -237,7 +237,7 @@ fun DrawScope.drawBoard(scene: BoardScene, density: Float) {
         if (!fading && !touchesVoltmeter && scene.showReadings && endpointCurrent > 0.0005f &&
             scene.solution.totalCurrent > 0.001f
         ) {
-            val forward = wireCurrentForward(wire, a, b, scene.solution)
+            val forward = wireCurrentForward(wire, a, b, scene.solution, scene.wires)
             val flowStart = if (forward) start else end
             val flowEnd = if (forward) end else start
             val flowBends = if (forward) bends else bends.reversed()
@@ -697,17 +697,107 @@ private fun terminalOutflow(
     return null
 }
 
+private fun terminalKey(ref: TerminalRef): String = "${ref.componentId}:${ref.index}"
+
+/**
+ * 按节点注入电流的子树和判断每根导线的实际方向。
+ * 并联支路汇流时，只比较导线某一端会得到错误方向；这里对整个
+ * 导线树做一次 KCL 分配，支路、汇流和干路方向保持一致。
+ */
+private fun computeWireDirections(
+    wires: List<WireSegment>,
+    byId: Map<Long, PlacedInstrument>,
+    solution: CircuitSolution,
+): Map<Long, Boolean> {
+    if (wires.isEmpty()) return emptyMap()
+    val adjacency = HashMap<String, MutableList<Int>>()
+    wires.forEachIndexed { index, wire ->
+        adjacency.getOrPut(terminalKey(wire.a)) { mutableListOf() }.add(index)
+        adjacency.getOrPut(terminalKey(wire.b)) { mutableListOf() }.add(index)
+    }
+    val parent = HashMap<String, String>()
+    val parentEdge = HashMap<String, Int>()
+    val visited = HashSet<String>()
+    val order = ArrayList<String>()
+    for (root in adjacency.keys) {
+        if (!visited.add(root)) continue
+        val stack = ArrayDeque<String>()
+        stack.addLast(root)
+        while (stack.isNotEmpty()) {
+            val node = stack.removeLast()
+            order += node
+            for (edgeIndex in adjacency[node].orEmpty()) {
+                val wire = wires[edgeIndex]
+                val other = if (terminalKey(wire.a) == node) terminalKey(wire.b) else terminalKey(wire.a)
+                if (visited.add(other)) {
+                    parent[other] = node
+                    parentEdge[other] = edgeIndex
+                    stack.addLast(other)
+                }
+            }
+        }
+    }
+
+    fun injection(node: String): Double {
+        val parts = node.split(':')
+        val id = parts.getOrNull(0)?.toLongOrNull() ?: return 0.0
+        val index = parts.getOrNull(1)?.toIntOrNull() ?: return 0.0
+        val component = byId[id] ?: return 0.0
+        val outflow = terminalOutflow(component, TerminalRef(id, index), solution) ?: return 0.0
+        return if (outflow) 1.0 else -1.0
+    }
+
+    val subtree = HashMap<String, Double>()
+    for (node in order.asReversed()) {
+        var sum = injection(node)
+        for (edgeIndex in adjacency[node].orEmpty()) {
+            val wire = wires[edgeIndex]
+            val other = if (terminalKey(wire.a) == node) terminalKey(wire.b) else terminalKey(wire.a)
+            if (parent[other] == node) sum += subtree[other] ?: 0.0
+        }
+        subtree[node] = sum
+    }
+
+    val result = HashMap<Long, Boolean>()
+    for (edgeIndex in wires.indices) {
+        val wire = wires[edgeIndex]
+        val aKey = terminalKey(wire.a)
+        val bKey = terminalKey(wire.b)
+        val child = if (parent[aKey] == bKey) aKey else if (parent[bKey] == aKey) bKey else continue
+        val p = parent[child] ?: continue
+        val sum = subtree[child] ?: 0.0
+        if (kotlin.math.abs(sum) < 0.000001) continue
+        result[wire.id] = if (sum > 0) {
+            // 子树净电流从 child 流向 parent
+            aKey == child
+        } else {
+            // 子树净电流从 parent 流向 child
+            aKey == p
+        }
+    }
+    return result
+}
+
 private fun wireCurrentForward(
     wire: WireSegment,
     a: PlacedInstrument,
     b: PlacedInstrument,
     solution: CircuitSolution,
+    wires: List<WireSegment>,
 ): Boolean {
     val outflowA = terminalOutflow(a, wire.a, solution)
     val outflowB = terminalOutflow(b, wire.b, solution)
+    val degreeA = wires.count {
+        terminalKey(it.a) == terminalKey(wire.a) || terminalKey(it.b) == terminalKey(wire.a)
+    }
+    val degreeB = wires.count {
+        terminalKey(it.a) == terminalKey(wire.b) || terminalKey(it.b) == terminalKey(wire.b)
+    }
+    // 并联汇流处两端都可能“向外送电”。优先看只接一根导线的
+    // 端点：该端点的电流只能流进/流出这根导线，方向是确定的。
+    if (outflowA != null && degreeA == 1) return outflowA
+    if (outflowB != null && degreeB == 1) return !outflowB
     if (outflowA != null && outflowB != null) {
-        // 两端都在向外/向内送电时，电流沿导线从另一端汇入；
-        // 例如并联支路汇流段，不能简单优先取 a 端。
         if (outflowA == outflowB) return false
         return outflowA
     }
@@ -740,15 +830,15 @@ private fun DrawScope.drawWireDirectionArrow(
     if (tangentLength < 0.001f) return
     val unit = Offset(tangent.x / tangentLength, tangent.y / tangentLength)
     val normal = Offset(-unit.y, unit.x)
-    val tip = position + unit * (4.8f * density)
-    val base = position - unit * (2.2f * density)
+    val tip = position + unit * (3.0f * density)
+    val base = position - unit * (1.4f * density)
     val color = if (wireColor == WireColor.WHITE) {
         LabColors.Primary.copy(alpha = 0.85f)
     } else {
         Color(0xFFB9F0FF).copy(alpha = 0.8f)
     }
-    drawLine(color, base + normal * (3.2f * density), tip, 1.25f * density, StrokeCap.Round)
-    drawLine(color, base - normal * (3.2f * density), tip, 1.25f * density, StrokeCap.Round)
+    drawLine(color, base + normal * (1.8f * density), tip, 1.0f * density, StrokeCap.Round)
+    drawLine(color, base - normal * (1.8f * density), tip, 1.0f * density, StrokeCap.Round)
 }
 
 private fun DrawScope.drawElectrons(
