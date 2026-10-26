@@ -624,6 +624,11 @@ fun LabApp(
 
         if (editor.aboutOpen) {
             val githubUrl = "https://github.com/thissideofthesea1120-collab/ElectricLab"
+            val versionName = remember(context) {
+                runCatching {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                }.getOrNull() ?: "2.4.1"
+            }
             val uriHandler = LocalUriHandler.current
             AlertDialog(
                 onDismissRequest = { editor.updateAboutOpen(false) },
@@ -635,7 +640,7 @@ fun LabApp(
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("电学虚拟实验室  v2.3.0", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
+                        Text("电学虚拟实验室  v$versionName", color = LabColors.Ink, fontWeight = FontWeight.SemiBold)
                         Text("适用于物理电学与电磁学启蒙实验。", fontSize = 12.sp)
                         Text(
                             "本项目与市面上所有相关产品及其运营方没有任何隶属、合作、授权或背书关系。\n" +
