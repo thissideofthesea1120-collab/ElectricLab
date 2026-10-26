@@ -689,6 +689,57 @@ private fun measureEquivalentResistance(
 }
 
 
+private fun sourceConnectedToProbes(
+    components: List<PlacedInstrument>,
+    wires: List<WireSegment>,
+    probeA: TerminalRef,
+    probeB: TerminalRef,
+): Boolean {
+    val uf = UnionFind()
+    fun key(id: Long, index: Int): String = terminalKey(id, index)
+    for (component in components) {
+        for (index in component.type.terminalOffsets.indices) uf.add(key(component.id, index))
+    }
+    for (wire in wires) uf.union(key(wire.a.componentId, wire.a.index), key(wire.b.componentId, wire.b.index))
+    for (component in components) {
+        if (component.damaged || component.type.isPowerSource) continue
+        val passive = when (component.type) {
+            InstrumentType.RESISTOR,
+            InstrumentType.RHEOSTAT,
+            InstrumentType.RESISTANCE_BOX,
+            InstrumentType.RESISTANCE_WIRE,
+            InstrumentType.LAMP,
+            InstrumentType.TEMP_LAMP,
+            InstrumentType.INDUCTOR,
+            InstrumentType.MOTOR,
+            InstrumentType.BUZZER,
+            InstrumentType.LED,
+            InstrumentType.ELECTROMAGNET,
+            InstrumentType.SOLENOID,
+            -> true
+            InstrumentType.SWITCH -> component.closed
+            else -> false
+        }
+        if (passive && component.type.terminalOffsets.size > 1) {
+            uf.union(key(component.id, 0), key(component.id, 1))
+        }
+    }
+    val roots = setOf(uf.find(key(probeA.componentId, probeA.index)), uf.find(key(probeB.componentId, probeB.index)))
+    return components.any { source ->
+        if (!source.type.isPowerSource || source.damaged) return@any false
+        val terminals = source.type.terminalOffsets.indices
+        val wired = terminals.count { index ->
+            wires.any { wire ->
+                wire.a.componentId == source.id && wire.a.index == index ||
+                    wire.b.componentId == source.id && wire.b.index == index
+            }
+        }
+        if (wired < 2) return@any false
+        terminals.any { index -> uf.find(key(source.id, index)) in roots }
+    }
+}
+
+
 private fun attachMultimeterMeasurements(
     components: List<PlacedInstrument>,
     wires: List<WireSegment>,
@@ -696,15 +747,16 @@ private fun attachMultimeterMeasurements(
 ): CircuitSolution {
     val meters = components.filter { it.type == InstrumentType.MULTIMETER }
     if (meters.isEmpty()) return result
-    val powered = components.any { source ->
-        source.type.isPowerSource && !source.damaged && wires.any { wire ->
-            wire.a.componentId == source.id || wire.b.componentId == source.id
-        }
-    }
     val readings = result.readings.toMutableMap()
     for (meter in meters) {
         val range = meter.multimeterRangeValue
         if (meter.multimeterIsVoltage || meter.multimeterIsCurrent) continue
+        val powered = sourceConnectedToProbes(
+            components,
+            wires,
+            TerminalRef(meter.id, 1),
+            TerminalRef(meter.id, 0),
+        )
         if (powered) {
             readings[meter.id] = (readings[meter.id] ?: ComponentReading()).copy(
                 multimeterMode = meter.multimeterMode,
