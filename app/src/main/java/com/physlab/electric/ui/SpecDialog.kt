@@ -43,6 +43,8 @@ import com.physlab.electric.model.ComponentReading
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.LampSpec
 import com.physlab.electric.model.MeterResistanceMode
+import com.physlab.electric.model.MultimeterMode
+import com.physlab.electric.model.multimeterRanges
 import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.ResistanceWireSamples
 import com.physlab.electric.model.isMagnet
@@ -393,6 +395,10 @@ fun InstrumentSpecDialog(
                         MeterResistanceEditor(editor, component)
                     }
 
+                    InstrumentType.MULTIMETER -> {
+                        MultimeterEditor(editor, component, reading)
+                    }
+
                     InstrumentType.GALVANOMETER -> {
                         Text("灵敏电流计", color = LabColors.InkMuted, fontSize = 10.sp)
                         Text(
@@ -489,7 +495,9 @@ private fun InstrumentDetailSummary(
         }
         component.type.isMeter -> {
             if (showReadings) {
-                if (component.type == InstrumentType.AMMETER) {
+                if (component.type == InstrumentType.MULTIMETER) {
+                    reading.multimeterDisplay.ifBlank { reading.multimeterWarning.ifBlank { "-" } }
+                } else if (component.type == InstrumentType.AMMETER) {
                     "示数 ${formatAmmeter(reading.meterSignedValue)} · 测量范围 ${reading.meterRangeLabel.ifBlank { "0.6A" }}"
                 } else {
                     "示数 ${formatVoltmeter(reading.meterSignedValue)} · 测量范围 ${reading.meterRangeLabel.ifBlank { "3V" }}"
@@ -833,6 +841,95 @@ private fun InternalResistanceEditor(editor: LabEditorState, component: PlacedIn
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
     }
+}
+
+@Composable
+private fun MultimeterEditor(
+    editor: LabEditorState,
+    component: PlacedInstrument,
+    reading: ComponentReading,
+) {
+    Text("测量模式", color = LabColors.InkMuted, fontSize = 10.sp)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OptionChip("DCV", component.multimeterMode == MultimeterMode.DC_VOLTAGE) {
+                editor.setMultimeterMode(component.id, MultimeterMode.DC_VOLTAGE)
+            }
+            OptionChip("ACV", component.multimeterMode == MultimeterMode.AC_VOLTAGE) {
+                editor.setMultimeterMode(component.id, MultimeterMode.AC_VOLTAGE)
+            }
+            OptionChip("DCA", component.multimeterMode == MultimeterMode.DC_CURRENT) {
+                editor.setMultimeterMode(component.id, MultimeterMode.DC_CURRENT)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OptionChip("ACA", component.multimeterMode == MultimeterMode.AC_CURRENT) {
+                editor.setMultimeterMode(component.id, MultimeterMode.AC_CURRENT)
+            }
+            OptionChip("Ω", component.multimeterMode == MultimeterMode.RESISTANCE) {
+                editor.setMultimeterMode(component.id, MultimeterMode.RESISTANCE)
+            }
+            OptionChip("二极管", component.multimeterMode == MultimeterMode.DIODE) {
+                editor.setMultimeterMode(component.id, MultimeterMode.DIODE)
+            }
+        }
+    }
+
+    Text("量程", color = LabColors.InkMuted, fontSize = 10.sp)
+    val ranges = multimeterRanges(component.multimeterMode)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ranges.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEachIndexed { localIndex, range ->
+                    val index = ranges.indexOf(range)
+                    OptionChip(range.label, component.multimeterRangeIndex == index) {
+                        editor.setMultimeterRange(component.id, index)
+                    }
+                }
+            }
+        }
+    }
+
+    if (component.multimeterMode == MultimeterMode.RESISTANCE) {
+        Text(
+            "调零：${String.format(java.util.Locale.US, "%.2f", component.multimeterZeroOffset)} Ω",
+            color = LabColors.InkMuted,
+            fontSize = 10.sp,
+        )
+        Slider(
+            value = component.multimeterZeroOffset.coerceIn(-5f, 5f),
+            onValueChange = { editor.setMultimeterZeroOffset(component.id, it) },
+            valueRange = -5f..5f,
+            colors = SliderDefaults.colors(
+                thumbColor = LabColors.Primary,
+                activeTrackColor = LabColors.Primary,
+                inactiveTrackColor = LabColors.SurfaceHigh,
+            ),
+        )
+    }
+
+    Text(
+        "读数：${reading.multimeterDisplay.ifBlank { reading.multimeterWarning.ifBlank { "—" } }}",
+        color = if (reading.multimeterWarning.isNotBlank()) LabColors.Amber else LabColors.Ink,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
+    if (component.multimeterMode == MultimeterMode.RESISTANCE ||
+        component.multimeterMode == MultimeterMode.DIODE
+    ) {
+        Text(
+            "电阻档和二极管档需要断电测量；检测到电路带电时会显示“请断电测量”。",
+            color = LabColors.InkFaint,
+            fontSize = 9.sp,
+            lineHeight = 13.sp,
+        )
+    }
+    Text(
+        "接线：COM 为公共端；VΩ 用于电压/电阻/二极管，A 用于电流。",
+        color = LabColors.InkFaint,
+        fontSize = 9.sp,
+        lineHeight = 13.sp,
+    )
 }
 
 @Composable

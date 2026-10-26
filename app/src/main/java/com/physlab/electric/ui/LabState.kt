@@ -10,6 +10,7 @@ import com.physlab.electric.model.InstrumentCategory
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.LampSpec
 import com.physlab.electric.model.MeterResistanceMode
+import com.physlab.electric.model.MultimeterMode
 import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.Selection
 import com.physlab.electric.model.TerminalRef
@@ -36,6 +37,7 @@ enum class ExperimentTemplate(
     OHM_LAW("伏安法测电阻", "滑动变阻器、电压表、电流表测未知电阻"),
     ELECTROMAGNET("电磁铁与磁场", "电磁铁、螺线管、小磁针"),
     MAGNETS("磁体间相互作用", "两块条形磁体与小磁针"),
+    MULTIMETER("多用电表测电阻", "电阻与多用电表，选择合适的电阻档"),
     RC_CHARGE("观察电容器充、放电实验", "电容、电阻、电表等已摆好，请按步骤接线"),
 }
 
@@ -899,6 +901,30 @@ class LabEditorState {
         }
     }
 
+    fun setMultimeterMode(id: Long, mode: MultimeterMode) {
+        if (components.none { it.id == id && it.type == InstrumentType.MULTIMETER }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(multimeterMode = mode, multimeterRangeIndex = 0) else it
+        }
+    }
+
+    fun setMultimeterRange(id: Long, index: Int) {
+        if (components.none { it.id == id && it.type == InstrumentType.MULTIMETER }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(multimeterRangeIndex = index.coerceIn(0, 4)) else it
+        }
+    }
+
+    fun setMultimeterZeroOffset(id: Long, offset: Float) {
+        if (components.none { it.id == id && it.type == InstrumentType.MULTIMETER }) return
+        pushHistory()
+        components = components.map {
+            if (it.id == id) it.copy(multimeterZeroOffset = offset) else it
+        }
+    }
+
     fun setWindingReversed(id: Long, reversed: Boolean) {
         if (components.none {
                 it.id == id && (it.type == InstrumentType.SOLENOID || it.type == InstrumentType.ELECTROMAGNET)
@@ -1046,6 +1072,9 @@ class LabEditorState {
                     put("specLocked", component.specLocked)
                     put("meterResistanceEnabled", component.meterResistanceEnabled)
                     put("meterResistanceMode", component.meterResistanceMode.name)
+                    put("multimeterMode", component.multimeterMode.name)
+                    put("multimeterRangeIndex", component.multimeterRangeIndex)
+                    put("multimeterZeroOffset", component.multimeterZeroOffset)
                     put("capacitanceUf", component.capacitanceUf)
                     put("inductanceMh", component.inductanceMh)
                     put("inductanceDcResistance", component.inductanceDcResistance)
@@ -1136,6 +1165,11 @@ class LabEditorState {
                 meterResistanceMode = runCatching {
                     MeterResistanceMode.valueOf(item.optString("meterResistanceMode", MeterResistanceMode.ANALOG.name))
                 }.getOrDefault(MeterResistanceMode.ANALOG),
+                multimeterMode = runCatching {
+                    MultimeterMode.valueOf(item.optString("multimeterMode", MultimeterMode.DC_VOLTAGE.name))
+                }.getOrDefault(MultimeterMode.DC_VOLTAGE),
+                multimeterRangeIndex = item.optInt("multimeterRangeIndex", 1).coerceIn(0, 4),
+                multimeterZeroOffset = item.optDouble("multimeterZeroOffset", 0.0).toFloat(),
                 capacitanceUf = item.optDouble("capacitanceUf", 470.0).toFloat(),
                 inductanceMh = item.optDouble("inductanceMh", 50.0).toFloat(),
                 inductanceDcResistance = item.optDouble("inductanceDcResistance", 2.0).toFloat(),
@@ -1791,6 +1825,29 @@ class LabEditorState {
                 components = listOf(magnet1, magnet2, compass)
             }
 
+            ExperimentTemplate.MULTIMETER -> {
+                val resistor = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.RESISTOR,
+                    center = Offset(start + usable * 0.48f, middle),
+                    label = "Rx",
+                    resistance = 10f,
+                )
+                val multimeter = PlacedInstrument(
+                    id = nextId++,
+                    type = InstrumentType.MULTIMETER,
+                    center = Offset(start + usable * 0.70f, bottom),
+                    label = "M",
+                    multimeterMode = MultimeterMode.RESISTANCE,
+                    multimeterRangeIndex = 0,
+                )
+                components = listOf(resistor, multimeter)
+                wires = listOf(
+                    WireSegment(nextId++, TerminalRef(resistor.id, 0), TerminalRef(multimeter.id, 1), WireColor.RED),
+                    WireSegment(nextId++, TerminalRef(resistor.id, 1), TerminalRef(multimeter.id, 0), WireColor.BLACK),
+                )
+            }
+
             ExperimentTemplate.RC_CHARGE -> {
                 val battery = PlacedInstrument(
                     id = nextId++,
@@ -1917,6 +1974,7 @@ class LabEditorState {
             InstrumentType.VOLTMETER -> "V"
             InstrumentType.GALVANOMETER -> "G"
             InstrumentType.MILLIAMMETER -> "mA"
+            InstrumentType.MULTIMETER -> "M"
             InstrumentType.RESISTOR -> "R"
             InstrumentType.RHEOSTAT -> "R"
             InstrumentType.RESISTANCE_BOX -> "R箱"

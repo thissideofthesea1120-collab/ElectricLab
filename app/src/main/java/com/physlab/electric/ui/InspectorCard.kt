@@ -455,6 +455,23 @@ private fun ComponentInspector(
                 }
             }
 
+            InstrumentType.MULTIMETER -> {
+                val display = reading?.multimeterDisplay.orEmpty()
+                    .ifBlank { reading?.multimeterWarning.orEmpty().ifBlank { "-" } }
+                if (showReadings) {
+                    MeterReading(
+                        label = "多用电表示数",
+                        value = display,
+                        hint = "COM + VΩ/A　按档位接入",
+                    )
+                    ReadingRow("当前档位", component.multimeterRangeValue.label)
+                } else {
+                    Text("多用电表 · 打开读数查看显示值", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    ReadingRow("当前档位", component.multimeterRangeValue.label)
+                    ReadingHiddenNote()
+                }
+            }
+
             InstrumentType.LAMP, InstrumentType.TEMP_LAMP -> {
                 val spec = component.lampSpec
                 val kind = if (component.type == InstrumentType.TEMP_LAMP) "热敏小灯泡" else "小灯泡"

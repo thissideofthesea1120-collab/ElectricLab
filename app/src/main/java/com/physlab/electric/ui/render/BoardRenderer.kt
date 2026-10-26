@@ -156,6 +156,10 @@ fun DrawScope.drawBoard(scene: BoardScene, density: Float) {
             meterOverRange = reading.meterOverRange,
             meterTerminal = reading.meterTerminal,
             meterFlipped = component.meterFlipped,
+            multimeterMode = component.multimeterMode.takeIf { component.type == InstrumentType.MULTIMETER },
+            multimeterDisplay = reading.multimeterDisplay,
+            multimeterWarning = reading.multimeterWarning,
+            meterOl = reading.meterOl,
             batteryCells = component.batteryCells,
             lampSpec = component.lampSpec,
             polarityFlipped = component.polarityFlipped,
@@ -916,6 +920,10 @@ private fun DrawScope.drawComponentLabel(
         component.type == InstrumentType.MILLIAMMETER ->
             if (showReadings) {
                 "${formatNumber(reading.meterSignedValue)} mA${if (reading.meterOverRange) "  超范围" else if (reading.meterReversed) "  反接" else ""}"
+            } else ""
+        component.type == InstrumentType.MULTIMETER ->
+            if (showReadings) {
+                reading.multimeterDisplay.ifBlank { reading.multimeterWarning }
             } else ""
         component.type == InstrumentType.LAMP || component.type == InstrumentType.TEMP_LAMP ->
             if (showReadings && reading.power > 0.03f) "${formatNumber(reading.power)} W" else ""

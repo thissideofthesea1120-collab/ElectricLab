@@ -19,6 +19,67 @@ enum class MeterResistanceMode {
     HIGH_PRECISION,
 }
 
+enum class MultimeterMode(val title: String, val symbol: String) {
+    DC_VOLTAGE("直流电压", "DCV"),
+    AC_VOLTAGE("交流电压", "ACV"),
+    DC_CURRENT("直流电流", "DCA"),
+    AC_CURRENT("交流电流", "ACA"),
+    RESISTANCE("电阻", "Ω"),
+    DIODE("二极管", "▷|"),
+}
+
+data class MultimeterRange(
+    val max: Float,
+    val label: String,
+    val unit: String,
+    val decimals: Int,
+)
+
+val MultimeterRanges: Map<MultimeterMode, List<MultimeterRange>> = mapOf(
+    MultimeterMode.DC_VOLTAGE to listOf(
+        MultimeterRange(2f, "2V", "V", 3),
+        MultimeterRange(20f, "20V", "V", 2),
+        MultimeterRange(200f, "200V", "V", 1),
+        MultimeterRange(1000f, "1000V", "V", 0),
+    ),
+    MultimeterMode.AC_VOLTAGE to listOf(
+        MultimeterRange(2f, "2V", "V", 3),
+        MultimeterRange(20f, "20V", "V", 2),
+        MultimeterRange(200f, "200V", "V", 1),
+        MultimeterRange(700f, "700V", "V", 0),
+    ),
+    MultimeterMode.DC_CURRENT to listOf(
+        MultimeterRange(0.002f, "2mA", "mA", 3),
+        MultimeterRange(0.02f, "20mA", "mA", 2),
+        MultimeterRange(0.2f, "200mA", "mA", 1),
+        MultimeterRange(10f, "10A", "A", 2),
+    ),
+    MultimeterMode.AC_CURRENT to listOf(
+        MultimeterRange(0.002f, "2mA", "mA", 3),
+        MultimeterRange(0.02f, "20mA", "mA", 2),
+        MultimeterRange(0.2f, "200mA", "mA", 1),
+        MultimeterRange(10f, "10A", "A", 2),
+    ),
+    MultimeterMode.RESISTANCE to listOf(
+        MultimeterRange(200f, "200Ω", "Ω", 1),
+        MultimeterRange(2_000f, "2kΩ", "kΩ", 3),
+        MultimeterRange(20_000f, "20kΩ", "kΩ", 2),
+        MultimeterRange(200_000f, "200kΩ", "kΩ", 1),
+        MultimeterRange(2_000_000f, "2MΩ", "MΩ", 2),
+    ),
+    MultimeterMode.DIODE to listOf(
+        MultimeterRange(2f, "二极管", "V", 2),
+    ),
+)
+
+fun multimeterRanges(mode: MultimeterMode): List<MultimeterRange> =
+    MultimeterRanges[mode] ?: MultimeterRanges.getValue(MultimeterMode.DC_VOLTAGE)
+
+fun PlacedInstrument.multimeterRange(): MultimeterRange {
+    val ranges = multimeterRanges(multimeterMode)
+    return ranges[multimeterRangeIndex.coerceIn(ranges.indices)]
+}
+
 enum class LampSpec(
     val voltage: Float,
     val current: Float,
@@ -131,6 +192,11 @@ enum class InstrumentType(
         "milliammeter", "毫安表", InstrumentCategory.METER, 84f, 92f,
         listOf(Offset(-26f, 39f), Offset(0f, 39f), Offset(26f, 39f)),
         listOf("−", "50", "500"), "mA",
+    ),
+    MULTIMETER(
+        "multimeter", "多用电表", InstrumentCategory.METER, 108f, 104f,
+        listOf(Offset(-32f, 46f), Offset(0f, 46f), Offset(32f, 46f)),
+        listOf("COM", "VΩ", "A"), "M",
     ),
     SWITCH(
         "switch", "开关", InstrumentCategory.CONTROL, 100f, 54f,
@@ -248,6 +314,9 @@ data class PlacedInstrument(
     val specLocked: Boolean = false,
     val meterResistanceEnabled: Boolean = false,
     val meterResistanceMode: MeterResistanceMode = MeterResistanceMode.ANALOG,
+    val multimeterMode: MultimeterMode = MultimeterMode.DC_VOLTAGE,
+    val multimeterRangeIndex: Int = 1,
+    val multimeterZeroOffset: Float = 0f,
     val capacitanceUf: Float = 470f,
     val inductanceMh: Float = 50f,
     val inductanceDcResistance: Float = 2f,
@@ -271,6 +340,16 @@ data class PlacedInstrument(
 
     val rheostatResistance: Float get() = slider.coerceIn(0f, 1f) * rheostatMax
 
+    val multimeterRangeValue: MultimeterRange get() = multimeterRange()
+
+    val multimeterIsVoltage: Boolean
+        get() = multimeterMode == MultimeterMode.DC_VOLTAGE ||
+            multimeterMode == MultimeterMode.AC_VOLTAGE
+
+    val multimeterIsCurrent: Boolean
+        get() = multimeterMode == MultimeterMode.DC_CURRENT ||
+            multimeterMode == MultimeterMode.AC_CURRENT
+
     val effectiveInternalResistance: Float
         get() = if (internalResistanceEnabled) {
             internalResistanceOhm.coerceIn(0.001f, 1f)
@@ -283,6 +362,18 @@ data class PlacedInstrument(
         }
 
     fun meterInternalResistance(terminal: Int): Float {
+        if (type == InstrumentType.MULTIMETER) {
+            return when {
+                multimeterIsVoltage -> 10_000_000f
+                multimeterIsCurrent -> when (multimeterRangeIndex.coerceIn(0, 3)) {
+                    0 -> 100f
+                    1 -> 10f
+                    2 -> 1f
+                    else -> 0.01f
+                }
+                else -> 10_000_000f
+            }.takeIf { terminal != 2 || multimeterIsCurrent } ?: 10_000_000f
+        }
         if (type == InstrumentType.GALVANOMETER) return 50f
         if (type == InstrumentType.MILLIAMMETER) return 5f
         val analog = if (type == InstrumentType.AMMETER) {
@@ -333,7 +424,8 @@ val InstrumentType.isMeter: Boolean
     get() = this == InstrumentType.AMMETER ||
         this == InstrumentType.VOLTMETER ||
         this == InstrumentType.GALVANOMETER ||
-        this == InstrumentType.MILLIAMMETER
+        this == InstrumentType.MILLIAMMETER ||
+        this == InstrumentType.MULTIMETER
 
 fun PlacedInstrument.ratedPower(): Float? = when (type) {
     InstrumentType.LAMP, InstrumentType.TEMP_LAMP -> lampSpec.ratedPower
@@ -382,6 +474,10 @@ data class ComponentReading(
     val meterNegativeOverRange: Boolean = false,
     val meterReversed: Boolean = false,
     val meterTerminal: Int = 1,
+    val multimeterMode: MultimeterMode? = null,
+    val multimeterDisplay: String = "",
+    val multimeterWarning: String = "",
+    val meterOl: Boolean = false,
 )
 
 data class CircuitSolution(
@@ -496,17 +592,179 @@ fun simulateCircuit(
     var result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds)
     repeat(3) {
         val tempLamps = components.filter { it.type == InstrumentType.TEMP_LAMP }
-        if (tempLamps.isEmpty()) return result
+        if (tempLamps.isEmpty()) return attachMultimeterMeasurements(components, wires, result)
         hotPowers = tempLamps.associateWith { result.readings[it.id]?.power ?: 0f }
             .mapKeys { it.key.id }
         result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds)
     }
-    return result
+    return attachMultimeterMeasurements(components, wires, result)
 }
 
-/**
- * AC 的一个短时间窗口：用多个瞬时解求 RMS，避免 50 Hz 波形在 50 ms UI 刷新下混叠。
- */
+private fun measureEquivalentResistance(
+    components: List<PlacedInstrument>,
+    wires: List<WireSegment>,
+    probeA: TerminalRef,
+    probeB: TerminalRef,
+): Float? {
+    val uf = UnionFind()
+    fun key(componentId: Long, index: Int): String = terminalKey(componentId, index)
+    for (component in components) {
+        for (index in component.type.terminalOffsets.indices) uf.add(key(component.id, index))
+    }
+    uf.add(key(probeA.componentId, probeA.index))
+    uf.add(key(probeB.componentId, probeB.index))
+    for (wire in wires) {
+        uf.union(key(wire.a.componentId, wire.a.index), key(wire.b.componentId, wire.b.index))
+    }
+    val aNode = uf.find(key(probeA.componentId, probeA.index))
+    val bNode = uf.find(key(probeB.componentId, probeB.index))
+    if (aNode == bNode) return 0f
+    val nodeIds = components.flatMap { component ->
+        component.type.terminalOffsets.indices.map { uf.find(key(component.id, it)) }
+    }.plus(listOf(aNode, bNode)).distinct()
+    val indexOf = nodeIds.withIndex().associate { it.value to it.index }
+    val n = nodeIds.size
+    val g = Array(n) { DoubleArray(n) }
+    val adjacency = Array(n) { mutableListOf<Int>() }
+
+    fun addResistance(ka: String, kb: String, resistance: Float) {
+        if (resistance <= 0f) return
+        val ia = indexOf[uf.find(ka)] ?: return
+        val ib = indexOf[uf.find(kb)] ?: return
+        if (ia == ib) return
+        val conductance = 1.0 / resistance.coerceAtLeast(0.0005f)
+        g[ia][ia] += conductance
+        g[ib][ib] += conductance
+        g[ia][ib] -= conductance
+        g[ib][ia] -= conductance
+        adjacency[ia] += ib
+        adjacency[ib] += ia
+    }
+
+    for (component in components) {
+        if (component.damaged) continue
+        val a = key(component.id, 0)
+        val b = if (component.type.terminalOffsets.size > 1) key(component.id, 1) else a
+        val resistance = when (component.type) {
+            InstrumentType.RESISTOR -> component.resistance
+            InstrumentType.RHEOSTAT -> component.rheostatResistance
+            InstrumentType.RESISTANCE_BOX -> component.resistanceBoxResistance
+            InstrumentType.RESISTANCE_WIRE -> component.wireResistance
+            InstrumentType.LAMP, InstrumentType.TEMP_LAMP -> component.lampResistance(null)
+            InstrumentType.SWITCH -> if (component.closed) 0.001f else 0f
+            InstrumentType.INDUCTOR -> component.inductanceDcResistance
+            InstrumentType.MOTOR -> 12f
+            InstrumentType.BUZZER -> 30f
+            InstrumentType.LED -> 180f
+            InstrumentType.ELECTROMAGNET -> 6f
+            InstrumentType.SOLENOID -> 5f
+            else -> 0f
+        }
+        if (resistance > 0f) addResistance(a, b, resistance)
+    }
+
+    val startIndex = indexOf[aNode] ?: return null
+    val groundIndex = indexOf[bNode] ?: return null
+    val seen = BooleanArray(n)
+    val queue = ArrayDeque<Int>()
+    seen[startIndex] = true
+    queue.addLast(startIndex)
+    while (queue.isNotEmpty()) {
+        val node = queue.removeFirst()
+        for (next in adjacency[node]) if (!seen[next]) {
+            seen[next] = true
+            queue.addLast(next)
+        }
+    }
+    if (!seen[groundIndex]) return null
+
+    val keep = (0 until n).filter { it != groundIndex }
+    val reducedIndex = keep.withIndex().associate { it.value to it.index }
+    val matrix = Array(keep.size) { r -> DoubleArray(keep.size) { c -> g[keep[r]][keep[c]] } }
+    val rhs = DoubleArray(keep.size)
+    reducedIndex[startIndex]?.let { rhs[it] = 1.0 }
+    val solution = solveLinearSystem(matrix, rhs)
+    val voltage = reducedIndex[startIndex]?.let { solution[it] } ?: 0.0
+    return voltage.toFloat().takeIf { it.isFinite() && it >= 0f }
+}
+
+
+private fun attachMultimeterMeasurements(
+    components: List<PlacedInstrument>,
+    wires: List<WireSegment>,
+    result: CircuitSolution,
+): CircuitSolution {
+    val meters = components.filter { it.type == InstrumentType.MULTIMETER }
+    if (meters.isEmpty()) return result
+    val powered = components.any { it.type.isPowerSource && !it.damaged }
+    val readings = result.readings.toMutableMap()
+    for (meter in meters) {
+        val range = meter.multimeterRangeValue
+        if (meter.multimeterIsVoltage || meter.multimeterIsCurrent) continue
+        if (powered) {
+            readings[meter.id] = (readings[meter.id] ?: ComponentReading()).copy(
+                multimeterMode = meter.multimeterMode,
+                multimeterDisplay = "请断电测量",
+                multimeterWarning = "请断电测量",
+                meterRangeLabel = range.label,
+                meterRange = range.max,
+                meterOl = false,
+            )
+            continue
+        }
+        val hasA = wires.any { it.a.componentId == meter.id && it.a.index == 1 || it.b.componentId == meter.id && it.b.index == 1 }
+        val hasB = wires.any { it.a.componentId == meter.id && it.a.index == 0 || it.b.componentId == meter.id && it.b.index == 0 }
+        if (!hasA || !hasB) {
+            readings[meter.id] = (readings[meter.id] ?: ComponentReading()).copy(
+                multimeterMode = meter.multimeterMode,
+                multimeterDisplay = "OL",
+                multimeterWarning = "",
+                meterRangeLabel = range.label,
+                meterRange = range.max,
+                meterOl = true,
+            )
+            continue
+        }
+
+        val value = measureEquivalentResistance(
+            components.filterNot { it.type == InstrumentType.MULTIMETER },
+            wires,
+            TerminalRef(meter.id, 1),
+            TerminalRef(meter.id, 0),
+        ) ?: Float.POSITIVE_INFINITY
+
+        val display = when (meter.multimeterMode) {
+            MultimeterMode.DIODE -> if (!value.isFinite()) "OL" else "1.00 V"
+            MultimeterMode.RESISTANCE -> {
+                val corrected = (value - meter.multimeterZeroOffset).coerceAtLeast(0f)
+                if (corrected > range.max * 1.02f || !corrected.isFinite()) {
+                    "OL"
+                } else {
+                    val scaled = when (range.unit) {
+                        "kΩ" -> corrected / 1_000f
+                        "MΩ" -> corrected / 1_000_000f
+                        else -> corrected
+                    }
+                    String.format(java.util.Locale.US, "%.${range.decimals}f %s", scaled, range.unit)
+                }
+            }
+            else -> "OL"
+        }
+        readings[meter.id] = (readings[meter.id] ?: ComponentReading()).copy(
+            multimeterMode = meter.multimeterMode,
+            multimeterDisplay = display,
+            multimeterWarning = "",
+            meterValue = if (value.isInfinite()) Float.MAX_VALUE else value,
+            meterSignedValue = if (value.isInfinite()) Float.MAX_VALUE else value,
+            meterRange = range.max,
+            meterRangeLabel = range.label,
+            meterOl = display == "OL",
+        )
+    }
+    return result.copy(readings = readings)
+}
+
+
 fun simulateAcFrame(
     components: List<PlacedInstrument>,
     wires: List<WireSegment>,
@@ -551,13 +809,33 @@ fun simulateAcFrame(
     val final = last ?: CircuitSolution(epoch = epoch)
     val readings = final.readings.mapValues { (id, reading) ->
         fun rms(sum: Double): Float = kotlin.math.sqrt(sum / count).toFloat()
+        val rmsMeter = rms(sumMeter[id] ?: 0.0)
+        val mm = components.firstOrNull { it.id == id }
+        val mmDisplay = if (mm != null && mm.type == InstrumentType.MULTIMETER &&
+            (mm.multimeterMode == MultimeterMode.AC_VOLTAGE || mm.multimeterMode == MultimeterMode.AC_CURRENT)
+        ) {
+            val range = mm.multimeterRangeValue
+            if (rmsMeter > range.max * 1.02f) {
+                "OL"
+            } else {
+                val scaled = if (mm.multimeterMode == MultimeterMode.AC_CURRENT && range.unit == "mA") {
+                    rmsMeter * 1000f
+                } else {
+                    rmsMeter
+                }
+                String.format(java.util.Locale.US, "%.${range.decimals}f %s", scaled, range.unit)
+            }
+        } else {
+            reading.multimeterDisplay
+        }
         reading.copy(
             current = rms(sumCurrent[id] ?: 0.0),
             signedCurrent = rms(sumCurrent[id] ?: 0.0),
             voltage = rms(sumVoltage[id] ?: 0.0),
             power = rms(sumPower[id] ?: 0.0),
-            meterSignedValue = rms(sumMeter[id] ?: 0.0),
-            meterValue = rms(sumMeter[id] ?: 0.0),
+            meterSignedValue = rmsMeter,
+            meterValue = rmsMeter,
+            multimeterDisplay = mmDisplay,
         )
     }
     return TransientResult(
@@ -770,6 +1048,19 @@ private fun simulateCircuitOnce(
                 meterBranches += MeterBranch(component.id, 2, t2, t0, r, 500f)
             }
 
+            component.type == InstrumentType.MULTIMETER -> {
+                val range = component.multimeterRangeValue
+                if (component.multimeterIsVoltage) {
+                    val r = 10_000_000f
+                    addBranch(component.id, t1, t0, r)
+                    meterBranches += MeterBranch(component.id, 1, t1, t0, r, range.max)
+                } else if (component.multimeterIsCurrent) {
+                    val r = component.meterInternalResistance(2)
+                    addBranch(component.id, t2, t0, r)
+                    meterBranches += MeterBranch(component.id, 2, t2, t0, r, range.max)
+                }
+            }
+
             component.type == InstrumentType.SPDT_SWITCH -> {
                 val selected = when (component.switchPosition) {
                     0 -> uf.find(terminalKey(component.id, 1))
@@ -892,6 +1183,21 @@ private fun simulateCircuitOnce(
             t0
         }
 
+        if (component.type == InstrumentType.MULTIMETER &&
+            !component.multimeterIsVoltage && !component.multimeterIsCurrent
+        ) {
+            val powered = sources.isNotEmpty()
+            readings[component.id] = ComponentReading(
+                multimeterMode = component.multimeterMode,
+                multimeterDisplay = if (powered) "请断电测量" else "OL",
+                multimeterWarning = if (powered) "请断电测量" else "",
+                meterRangeLabel = component.multimeterRangeValue.label,
+                meterRange = component.multimeterRangeValue.max,
+                meterOl = !powered,
+            )
+            continue
+        }
+
         if (component.type.isMeter) {
             val candidates = meterBranches.filter { it.componentId == component.id }
             fun terminalWired(terminal: Int): Boolean = wires.any {
@@ -911,6 +1217,11 @@ private fun simulateCircuitOnce(
                 InstrumentType.AMMETER -> signedCurrent
                 InstrumentType.MILLIAMMETER -> signedCurrent * 1000.0
                 InstrumentType.GALVANOMETER -> signedCurrent * 1_000_000.0
+                InstrumentType.MULTIMETER -> if (component.multimeterIsCurrent) {
+                    signedCurrent
+                } else {
+                    signedCurrent * active.resistance
+                }
                 else -> signedCurrent * active.resistance
             }
             val value = kotlin.math.abs(rawValue).toFloat()
@@ -918,9 +1229,35 @@ private fun simulateCircuitOnce(
                 InstrumentType.AMMETER -> if (active.range <= 0.6f) "0.6A" else "3A"
                 InstrumentType.MILLIAMMETER -> if (active.range <= 50f) "50mA" else "500mA"
                 InstrumentType.GALVANOMETER -> "±300μA"
+                InstrumentType.MULTIMETER -> component.multimeterRangeValue.label
                 else -> if (active.range <= 3f) "3V" else "15V"
             }
             val isGalvanometer = component.type == InstrumentType.GALVANOMETER
+            val isMultimeter = component.type == InstrumentType.MULTIMETER
+            val multimeterRange = if (isMultimeter) component.multimeterRangeValue else null
+            val multimeterDisplay = if (isMultimeter && multimeterRange != null) {
+                if (value > multimeterRange.max * 1.02f) {
+                    "OL"
+                } else {
+                    val scaled = when (component.multimeterMode) {
+                        MultimeterMode.DC_CURRENT, MultimeterMode.AC_CURRENT ->
+                            if (multimeterRange.unit == "mA") value * 1000f else value
+                        MultimeterMode.RESISTANCE ->
+                            when (multimeterRange.unit) {
+                                "kΩ" -> value / 1_000f
+                                "MΩ" -> value / 1_000_000f
+                                else -> value
+                            }
+                        else -> value
+                    }
+                    String.format(
+                        java.util.Locale.US,
+                        "%.${multimeterRange.decimals}f %s",
+                        scaled,
+                        multimeterRange.unit,
+                    )
+                }
+            } else ""
             readings[component.id] = ComponentReading(
                 current = if (component.type == InstrumentType.AMMETER) {
                     value
@@ -940,6 +1277,8 @@ private fun simulateCircuitOnce(
                     rawValue < -active.range / (if (component.type == InstrumentType.MILLIAMMETER) 5f else 6f),
                 meterReversed = !isGalvanometer && rawValue < -1e-9,
                 meterTerminal = active.terminal,
+                multimeterMode = if (isMultimeter) component.multimeterMode else null,
+                multimeterDisplay = multimeterDisplay,
             )
             continue
         }

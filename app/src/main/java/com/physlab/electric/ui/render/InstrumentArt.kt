@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.nativeCanvas
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.LampSpec
+import com.physlab.electric.model.MultimeterMode
 import com.physlab.electric.model.ResistanceWireSamples
 import kotlin.math.cos
 import kotlin.math.sin
@@ -34,6 +35,10 @@ data class InstrumentVisual(
     val meterOverRange: Boolean = false,
     val meterTerminal: Int = 1,
     val meterFlipped: Boolean = false,
+    val multimeterMode: MultimeterMode? = null,
+    val multimeterDisplay: String = "",
+    val multimeterWarning: String = "",
+    val meterOl: Boolean = false,
     val batteryCells: Int = 2,
     val lampSpec: LampSpec? = null,
     val polarityFlipped: Boolean = false,
@@ -86,6 +91,7 @@ fun DrawScope.drawInstrument(
             InstrumentType.AMMETER -> drawMeter(visual, isAmmeter = true)
             InstrumentType.VOLTMETER -> drawMeter(visual, isAmmeter = false)
             InstrumentType.MILLIAMMETER -> drawMeter(visual, isAmmeter = true)
+            InstrumentType.MULTIMETER -> drawMultimeter(visual)
             InstrumentType.GALVANOMETER -> drawGalvanometerMeter(visual)
             InstrumentType.SWITCH -> drawSwitch(visual)
             InstrumentType.SPDT_SWITCH -> drawSpdtSwitch(visual)
@@ -1034,6 +1040,110 @@ private fun DrawScope.drawGalvanometerMeter(visual: InstrumentVisual) {
     textLabel("−300       0       +300", 0f, 27f, 4.1f, Color(0xFF8D7B60), true)
     bindingPost(-26f, 39f, Color(0xFF3A404B))
     bindingPost(26f, 39f, Color(0xFF3A404B))
+}
+
+private fun DrawScope.drawMultimeter(visual: InstrumentVisual) {
+    softShadow(0f, 48f, 48f, 7f, 0.55f)
+    surfacePanel(-50f, -50f, 50f, 49f, 9f, Color(0xFF303947), Color(0xFF141A22), Color(0xFF080B10), 1.4f)
+    drawRoundRect(
+        color = Color(0xFF465365),
+        topLeft = Offset(-46f, -46f),
+        size = Size(92f, 90f),
+        cornerRadius = CornerRadius(6f, 6f),
+        style = Stroke(1.0f),
+    )
+
+    // LCD
+    drawRoundRect(
+        color = Color(0xFF10231B),
+        topLeft = Offset(-42f, -43f),
+        size = Size(84f, 35f),
+        cornerRadius = CornerRadius(3f, 3f),
+    )
+    drawRoundRect(
+        color = Color(0xFF6FE0A2).copy(alpha = 0.55f),
+        topLeft = Offset(-41f, -42f),
+        size = Size(82f, 33f),
+        cornerRadius = CornerRadius(3f, 3f),
+        style = Stroke(0.8f),
+    )
+    val modeLabel = visual.multimeterMode?.symbol ?: "DCV"
+    textLabel(modeLabel, -35f, -36f, 5.5f, Color(0xFF8FE8B9), true)
+    textLabel(
+        visual.multimeterDisplay.ifBlank { "0.00" },
+        0f,
+        -18f,
+        10f,
+        Color(0xFFB6FFD4),
+        true,
+    )
+    textLabel(
+        visual.meterRangeLabel.ifBlank { "20V" },
+        33f,
+        -5f,
+        4.8f,
+        Color(0xFF8FE8B9),
+        true,
+    )
+    if (visual.meterOl) {
+        textLabel("OL", 30f, -36f, 5.2f, Color(0xFFFFB4A8), true)
+    }
+
+    // Small analog pointer under the LCD
+    val pivot = Offset(0f, 5f)
+    drawArc(
+        color = Color(0xFF68768B),
+        startAngle = 200f,
+        sweepAngle = 140f,
+        useCenter = false,
+        topLeft = Offset(pivot.x - 30f, pivot.y - 30f),
+        size = Size(60f, 60f),
+        style = Stroke(0.9f),
+    )
+    for (i in 0..10) {
+        val angle = Math.toRadians((200f + 14f * i).toDouble())
+        val inner = if (i % 5 == 0) 24f else 27f
+        drawLine(
+            Color(0xFFB8C6D8),
+            Offset(pivot.x + cos(angle).toFloat() * inner, pivot.y + sin(angle).toFloat() * inner),
+            Offset(pivot.x + cos(angle).toFloat() * 30f, pivot.y + sin(angle).toFloat() * 30f),
+            0.7f,
+            StrokeCap.Round,
+        )
+    }
+    val fraction = (visual.meterFraction ?: 0f).coerceIn(0f, 1f)
+    val needleAngle = Math.toRadians((200f + 140f * fraction).toDouble())
+    drawLine(
+        Color(0xFFD83942),
+        pivot,
+        Offset(
+            pivot.x + cos(needleAngle).toFloat() * 25f,
+            pivot.y + sin(needleAngle).toFloat() * 25f,
+        ),
+        1.4f,
+        StrokeCap.Round,
+    )
+    drawCircle(Color(0xFF151B24), 3f, pivot)
+
+    // Rotary range switch
+    drawCircle(Color(0xFF202833), 12f, Offset(0f, 31f))
+    drawCircle(Color(0xFF0C1016), 9f, Offset(0f, 31f))
+    drawLine(
+        Color(0xFFD9E2EF),
+        Offset(0f, 31f),
+        Offset(0f, 22f),
+        1.6f,
+        StrokeCap.Round,
+    )
+    textLabel("M", 0f, 31f, 6f, Color(0xFF8FA3BC), true)
+
+    // Jacks
+    bindingPost(-34f, 43f, Color(0xFF202833))
+    bindingPost(0f, 43f, Color(0xFFD83942))
+    bindingPost(34f, 43f, Color(0xFF202833))
+    textLabel("COM", -34f, 49f, 4f, Color(0xFF9FAEC1), true)
+    textLabel("VΩ", 0f, 49f, 4f, Color(0xFFD9E2EF), true)
+    textLabel("A", 34f, 49f, 4f, Color(0xFFD9E2EF), true)
 }
 
 private fun DrawScope.drawMeter(visual: InstrumentVisual, isAmmeter: Boolean) {

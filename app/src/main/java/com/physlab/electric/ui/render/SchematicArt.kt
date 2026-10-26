@@ -111,7 +111,8 @@ private fun schematicTerminals(
     solution: CircuitSolution,
 ): Pair<Int, Int>? {
     return when {
-        component.type == InstrumentType.AMMETER || component.type == InstrumentType.VOLTMETER -> {
+        component.type == InstrumentType.AMMETER || component.type == InstrumentType.VOLTMETER ||
+            component.type == InstrumentType.MULTIMETER -> {
             val positive = solution.readings[component.id]?.meterTerminal ?: 1
             0 to positive.coerceIn(1, 2)
         }
@@ -372,7 +373,7 @@ private fun DrawScope.drawClearance(center: Offset, density: Float, radiusDp: Fl
 
 private fun schematicTerminal(item: SchematicItem, index: Int, density: Float): Offset {
     val local = when (item.component.type) {
-        InstrumentType.AMMETER, InstrumentType.VOLTMETER ->
+        InstrumentType.AMMETER, InstrumentType.VOLTMETER, InstrumentType.MULTIMETER ->
             if (index == 0) Offset(-30f, 0f) else Offset(30f, 0f)
         InstrumentType.RHEOSTAT -> when (index) {
             0 -> Offset(-26f, 4f)
@@ -517,7 +518,7 @@ private fun DrawScope.drawSchematicSymbol(
                 drawLine(line, Offset(12f, 0f), Offset(21f, 0f), thin, StrokeCap.Round)
             }
 
-            InstrumentType.AMMETER, InstrumentType.VOLTMETER -> {
+            InstrumentType.AMMETER, InstrumentType.VOLTMETER, InstrumentType.MULTIMETER -> {
                 drawCircle(Color(0xFF10151D), 11.5f, Offset.Zero)
                 drawCircle(line, 11.5f, Offset.Zero, style = Stroke(1.7f))
             }
@@ -629,6 +630,14 @@ private fun DrawScope.drawSchematicSymbol(
         )
         InstrumentType.VOLTMETER -> textLabel(
             "V",
+            item.center.x,
+            item.center.y + 4.3f * density,
+            12.5f * density,
+            Color(0xFFE7F2FF),
+            true,
+        )
+        InstrumentType.MULTIMETER -> textLabel(
+            "M",
             item.center.x,
             item.center.y + 4.3f * density,
             12.5f * density,

@@ -749,17 +749,16 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.3.2", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.4.0", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.3.2 · 收尾稳定版\n\n" +
-                            "• 修正并联电路电流方向\n" +
-                            "• 导线粒子与箭头回到导线内\n" +
-                            "• 修正电感动态方向，右侧放电不再误损坏\n" +
-                            "• 修正交流电下电容与灯泡不工作\n" +
-                            "• 毫安表负刻度改为 −10 / −100 mA\n" +
-                            "• 第 15 关隐藏电源内阻\n" +
-                            "• 蜂鸣器改为中文语音，间隔 1 秒",
+                        "2.4.0 · 多用电表\n\n" +
+                            "• 新增 DCV / ACV / DCA / ACA / 电阻 / 二极管档\n" +
+                            "• 数字 LCD + 指针双显示\n" +
+                            "• 电压、电流、电阻、二极管测量\n" +
+                            "• 电阻档带电时提示“请断电测量”\n" +
+                            "• 新增多用电表测电阻模板\n" +
+                            "• 保留并联方向、电感、AC、蜂鸣器语音修正",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,
