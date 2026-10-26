@@ -228,7 +228,7 @@ class LabEditorState {
 
     fun openMeterZoom(id: Long) {
         val component = components.firstOrNull { it.id == id } ?: return
-        if (!component.type.isMeter) return
+        if (!component.type.isMeter || component.type == InstrumentType.MULTIMETER) return
         meterZoomId = id
         wirePanelId = null
         selection = Selection(componentId = id)
