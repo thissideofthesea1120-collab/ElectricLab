@@ -749,15 +749,17 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.3.1", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.3.2", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.3.1\n\n" +
-                            "• 修复交流电下电容与灯泡不工作\n" +
-                            "• 修复低阻负载误判为电源短路\n" +
-                            "• 修复导线电流粒子跑出导线\n" +
+                        "2.3.2 · 收尾稳定版\n\n" +
+                            "• 修正并联电路电流方向\n" +
+                            "• 导线粒子与箭头回到导线内\n" +
+                            "• 修正电感动态方向，右侧放电不再误损坏\n" +
+                            "• 修正交流电下电容与灯泡不工作\n" +
                             "• 毫安表负刻度改为 −10 / −100 mA\n" +
-                            "• 第 15 关隐藏电源内阻并精简详细页",
+                            "• 第 15 关隐藏电源内阻\n" +
+                            "• 蜂鸣器改为中文语音，间隔 1 秒",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,
