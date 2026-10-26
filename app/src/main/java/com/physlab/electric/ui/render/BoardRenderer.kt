@@ -220,7 +220,13 @@ fun DrawScope.drawBoard(scene: BoardScene, density: Float) {
             visual = visual,
         )
         if (component.damaged) {
-            drawDamagedOverlay(component, density)
+            if (component.type.isRotatable) {
+                withTransform({ rotate(component.rotation, pivot = component.center * density) }) {
+                    drawDamagedOverlay(component, density)
+                }
+            } else {
+                drawDamagedOverlay(component, density)
+            }
         }
     }
 

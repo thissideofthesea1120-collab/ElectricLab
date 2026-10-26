@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.nativeCanvas
 import com.physlab.electric.model.InstrumentType
+import com.physlab.electric.model.isRotatable
 import com.physlab.electric.model.LampSpec
 import com.physlab.electric.model.MultimeterMode
 import com.physlab.electric.model.ResistanceWireSamples
@@ -74,9 +75,7 @@ fun DrawScope.drawInstrument(
     withTransform({
         translate(center.x, center.y)
         scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
-        if ((type == InstrumentType.BAR_MAGNET || type == InstrumentType.HORSESHOE_MAGNET) &&
-            visual.rotation != 0f
-        ) {
+        if (type.isRotatable && visual.rotation != 0f) {
             rotate(visual.rotation, pivot = Offset.Zero)
         }
     }) {
