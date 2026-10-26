@@ -436,7 +436,6 @@ val InstrumentType.isMeter: Boolean
 
 val InstrumentType.isRotatable: Boolean
     get() = !isMeter &&
-        this != InstrumentType.POWER_SUPPLY &&
         this != InstrumentType.COMPASS &&
         this != InstrumentType.PAPERCLIPS
 

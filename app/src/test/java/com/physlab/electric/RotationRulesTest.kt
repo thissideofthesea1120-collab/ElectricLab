@@ -11,7 +11,6 @@ class RotationRulesTest {
     @Test
     fun rotationExclusionsAreCorrect() {
         val excluded = setOf(
-            InstrumentType.POWER_SUPPLY,
             InstrumentType.AMMETER,
             InstrumentType.VOLTMETER,
             InstrumentType.GALVANOMETER,
@@ -27,6 +26,7 @@ class RotationRulesTest {
         }
         check(InstrumentType.BATTERY.isRotatable)
         check(InstrumentType.STORAGE_BATTERY.isRotatable)
+        check(InstrumentType.POWER_SUPPLY.isRotatable)
     }
 
     @Test
