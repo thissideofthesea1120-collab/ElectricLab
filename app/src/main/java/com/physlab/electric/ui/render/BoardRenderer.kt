@@ -704,8 +704,14 @@ private fun wireCurrentForward(
     solution: CircuitSolution,
 ): Boolean {
     val outflowA = terminalOutflow(a, wire.a, solution)
-    if (outflowA != null) return outflowA
     val outflowB = terminalOutflow(b, wire.b, solution)
+    if (outflowA != null && outflowB != null) {
+        // 两端都在向外/向内送电时，电流沿导线从另一端汇入；
+        // 例如并联支路汇流段，不能简单优先取 a 端。
+        if (outflowA == outflowB) return false
+        return outflowA
+    }
+    if (outflowA != null) return outflowA
     if (outflowB != null) return !outflowB
     return true
 }
@@ -768,8 +774,8 @@ private fun DrawScope.drawElectrons(
     while (distance < length) {
         val pos = measure.getPosition(distance)
         val dotColor = if (wireColor == WireColor.WHITE) LabColors.Primary else Color(0xFFA9E9FF)
-        drawCircle(dotColor.copy(alpha = 0.16f), 2.1f * density, pos)
-        drawCircle(dotColor.copy(alpha = 0.95f), 1.05f * density, pos)
+        drawCircle(dotColor.copy(alpha = 0.14f), 1.55f * density, pos)
+        drawCircle(dotColor.copy(alpha = 0.95f), 0.9f * density, pos)
         distance += spacing
     }
 }
