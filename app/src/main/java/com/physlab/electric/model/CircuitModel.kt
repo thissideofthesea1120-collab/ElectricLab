@@ -401,7 +401,14 @@ data class PlacedInstrument(
     fun terminalPosition(index: Int): Offset {
         val offset = type.terminal(index)
         val mirrored = if (meterFlipped && type.isMeter) Offset(-offset.x, offset.y) else offset
-        return center + mirrored
+        if (rotation == 0f) return center + mirrored
+        val radians = Math.toRadians(rotation.toDouble())
+        val c = kotlin.math.cos(radians).toFloat()
+        val s = kotlin.math.sin(radians).toFloat()
+        return center + Offset(
+            mirrored.x * c - mirrored.y * s,
+            mirrored.x * s + mirrored.y * c,
+        )
     }
 }
 
