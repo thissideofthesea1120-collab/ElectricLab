@@ -738,11 +738,7 @@ private fun DrawScope.drawElectrons(
     density: Float,
     phase: Float,
 ) {
-    val lane = when (wireColor) {
-        WireColor.RED -> 6.5f
-        WireColor.BLACK -> -6.5f
-        WireColor.WHITE -> 0f
-    } * density
+    val lane = 0f
     val path = wirePath(start, end, bends, laneOffset = lane)
     val measure = PathMeasure()
     measure.setPath(path, false)
@@ -753,8 +749,8 @@ private fun DrawScope.drawElectrons(
     while (distance < length) {
         val pos = measure.getPosition(distance)
         val dotColor = if (wireColor == WireColor.WHITE) LabColors.Primary else Color(0xFFA9E9FF)
-        drawCircle(dotColor.copy(alpha = 0.16f), 4.6f * density, pos)
-        drawCircle(dotColor.copy(alpha = 0.95f), 1.55f * density, pos)
+        drawCircle(dotColor.copy(alpha = 0.16f), 2.7f * density, pos)
+        drawCircle(dotColor.copy(alpha = 0.95f), 1.25f * density, pos)
         distance += spacing
     }
 }

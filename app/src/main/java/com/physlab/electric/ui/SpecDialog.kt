@@ -772,6 +772,17 @@ private fun OptionChip(text: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun InternalResistanceEditor(editor: LabEditorState, component: PlacedInstrument) {
+    val hideForEmfChallenge = editor.challengeActive &&
+        ChallengeTask.entries.getOrNull(editor.challengeIndex) == ChallengeTask.EMF_INTERNAL_RESISTANCE &&
+        component.type.isPowerSource
+    if (hideForEmfChallenge) {
+        Text(
+            "本关电源内阻不可见，请通过实验测量。",
+            color = LabColors.InkMuted,
+            fontSize = 10.sp,
+        )
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("电源内阻", color = LabColors.InkMuted, fontSize = 10.sp)

@@ -75,6 +75,7 @@ import com.physlab.electric.model.WireColor
 import com.physlab.electric.model.WireSegment
 import com.physlab.electric.model.DynamicState
 import com.physlab.electric.model.simulateCircuit
+import com.physlab.electric.model.simulateAcFrame
 import com.physlab.electric.model.simulateTransientStep
 import com.physlab.electric.ui.render.InstrumentVisual
 import com.physlab.electric.ui.render.drawInstrument
@@ -98,15 +99,23 @@ fun LabApp(
     val hasDynamic = editor.components.any {
         it.type == InstrumentType.CAPACITOR || it.type == InstrumentType.INDUCTOR
     }
+    val hasAc = editor.components.any {
+        it.type == InstrumentType.POWER_SUPPLY && it.supplyAc
+    }
+    val acTime = remember { androidx.compose.runtime.mutableStateOf(0f) }
+    val acSolution = remember { androidx.compose.runtime.mutableStateOf<CircuitSolution?>(null) }
     val dynamicTopology = editor.components.map {
         listOf(it.id, it.type.ordinal, it.capacitanceUf, it.inductanceMh)
     } + editor.wires.map { listOf(it.a.componentId, it.a.index, it.b.componentId, it.b.index) }
     LaunchedEffect(dynamicTopology, editor.topologyEpoch) {
         dynamicState.value = DynamicState()
+        acTime.value = 0f
+        acSolution.value = null
     }
-    LaunchedEffect(hasDynamic, dynamicTopology) {
-        if (!hasDynamic) {
+    LaunchedEffect(hasDynamic, hasAc, dynamicTopology) {
+        if (!hasDynamic && !hasAc) {
             dynamicState.value = DynamicState()
+            acSolution.value = null
             return@LaunchedEffect
         }
         while (true) {
@@ -115,17 +124,43 @@ fun LabApp(
             val wires = editor.fadingWireId?.let { rewiredId ->
                 editor.wires.filterNot { it.id == rewiredId }
             } ?: editor.wires
-            dynamicState.value = simulateTransientStep(
-                components = editor.components,
-                wires = wires,
-                state = dynamicState.value,
-                dt = 0.05f,
-            ).state
+            if (hasAc) {
+                val result = simulateAcFrame(
+                    components = editor.components,
+                    wires = wires,
+                    state = dynamicState.value,
+                    startTimeSeconds = acTime.value,
+                    dt = 0.001f,
+                    steps = 20,
+                    epoch = editor.topologyEpoch,
+                )
+                dynamicState.value = result.state
+                acSolution.value = result.solution
+                acTime.value += 0.02f
+            } else {
+                dynamicState.value = simulateTransientStep(
+                    components = editor.components,
+                    wires = wires,
+                    state = dynamicState.value,
+                    dt = 0.05f,
+                ).state
+            }
         }
     }
-    val solution = remember(editor.components, editor.wires, editor.fadingWireId, dynamicState.value) {
-        simulateCircuit(editor.components, activeWires, dynamicState.value, 0.05f, editor.topologyEpoch)
+    val baseSolution = remember(
+        editor.components, editor.wires, editor.fadingWireId,
+        dynamicState.value, acTime.value, hasAc,
+    ) {
+        simulateCircuit(
+            editor.components,
+            activeWires,
+            dynamicState.value,
+            0.05f,
+            editor.topologyEpoch,
+            if (hasAc) acTime.value else 0f,
+        )
     }
+    val solution = if (hasAc) acSolution.value ?: baseSolution else baseSolution
     LaunchedEffect(solution.readings, editor.challengeActive) {
         editor.startCapacitorTimerIfNeeded(solution)
     }
@@ -175,6 +210,7 @@ fun LabApp(
     }
     var snapshotDialogOpen by remember { mutableStateOf(false) }
     var recordDialogOpen by remember { mutableStateOf(false) }
+    var changelogOpen by remember { mutableStateOf(false) }
     var challengeExitConfirm by remember { mutableStateOf(false) }
     var snapshots by remember { mutableStateOf(SnapshotStore.load(context)) }
     val finishGuide: () -> Unit = {
@@ -271,6 +307,7 @@ fun LabApp(
                 onOpenChallenge = { editor.openChallenge() },
                 onOpenSnapshots = { snapshotDialogOpen = true },
                 onOpenRecords = { recordDialogOpen = true },
+                onOpenChangelog = { changelogOpen = true },
                 buzzerMuted = buzzerMuted,
                 onToggleBuzzer = {
                     val next = !buzzerMuted
@@ -687,6 +724,33 @@ fun LabApp(
             )
         }
 
+        if (changelogOpen) {
+            AlertDialog(
+                onDismissRequest = { changelogOpen = false },
+                title = { Text("更新日志 · 2.3.1", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "2.3.1\n\n" +
+                            "• 修复交流电下电容与灯泡不工作\n" +
+                            "• 修复低阻负载误判为电源短路\n" +
+                            "• 修复导线电流粒子跑出导线\n" +
+                            "• 毫安表负刻度改为 −10 / −100 mA\n" +
+                            "• 第 15 关隐藏电源内阻并精简详细页",
+                        color = LabColors.InkMuted,
+                        fontSize = 10.5.sp,
+                        lineHeight = 16.sp,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { changelogOpen = false }) {
+                        Text("知道了", color = LabColors.Primary, fontWeight = FontWeight.Bold)
+                    }
+                },
+                containerColor = LabColors.SurfaceRaised,
+                titleContentColor = LabColors.Ink,
+            )
+        }
+
         if (recordDialogOpen) {
             RecordTableDialog(
                 records = editor.records,
@@ -769,6 +833,7 @@ private fun EditorTopBar(
     onOpenChallenge: () -> Unit,
     onOpenSnapshots: () -> Unit,
     onOpenRecords: () -> Unit,
+    onOpenChangelog: () -> Unit,
     buzzerMuted: Boolean,
     onToggleBuzzer: () -> Unit,
     onResetView: () -> Unit,
@@ -924,6 +989,14 @@ private fun EditorTopBar(
                         onClick = {
                             menuOpen = false
                             onHelp()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("更新日志", fontSize = 12.sp) },
+                        leadingIcon = { LabIcon(LabIcon.INFO, LabColors.Primary, Modifier.size(16.dp)) },
+                        onClick = {
+                            menuOpen = false
+                            onOpenChangelog()
                         },
                     )
                     DropdownMenuItem(

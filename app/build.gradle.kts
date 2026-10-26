@@ -25,8 +25,8 @@ android {
         applicationId = "com.physlab.electric"
         minSdk = 23
         targetSdk = 35
-        versionCode = 42
-        versionName = "2.3.0"
+        versionCode = 43
+        versionName = "2.3.1"
         resourceConfigurations += listOf("zh")
     }
 
@@ -78,5 +78,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     screenshotTestImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
 }
 

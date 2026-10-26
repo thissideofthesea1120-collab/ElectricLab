@@ -490,17 +490,86 @@ fun simulateCircuit(
     dynamicState: DynamicState? = null,
     dt: Float = 0.05f,
     epoch: Long = 0L,
+    timeSeconds: Float = 0f,
 ): CircuitSolution {
     var hotPowers = emptyMap<Long, Float>()
-    var result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch)
+    var result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds)
     repeat(3) {
         val tempLamps = components.filter { it.type == InstrumentType.TEMP_LAMP }
         if (tempLamps.isEmpty()) return result
         hotPowers = tempLamps.associateWith { result.readings[it.id]?.power ?: 0f }
             .mapKeys { it.key.id }
-        result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch)
+        result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds)
     }
     return result
+}
+
+/**
+ * AC 的一个短时间窗口：用多个瞬时解求 RMS，避免 50 Hz 波形在 50 ms UI 刷新下混叠。
+ */
+fun simulateAcFrame(
+    components: List<PlacedInstrument>,
+    wires: List<WireSegment>,
+    state: DynamicState,
+    startTimeSeconds: Float,
+    dt: Float = 0.001f,
+    steps: Int = 20,
+    epoch: Long = 0L,
+): TransientResult {
+    val count = steps.coerceAtLeast(1)
+    var dynamic = state
+    var last: CircuitSolution? = null
+    val sumCurrent = HashMap<Long, Double>()
+    val sumVoltage = HashMap<Long, Double>()
+    val sumPower = HashMap<Long, Double>()
+    val sumMeter = HashMap<Long, Double>()
+    val damaged = linkedSetOf<Long>()
+
+    for (i in 0 until count) {
+        val solution = simulateCircuit(
+            components = components,
+            wires = wires,
+            dynamicState = dynamic,
+            dt = dt,
+            epoch = epoch,
+            timeSeconds = startTimeSeconds + dt * i,
+        )
+        dynamic = DynamicState(
+            capacitorVoltages = solution.capacitorVoltages,
+            inductorCurrents = solution.inductorCurrents,
+        )
+        last = solution
+        damaged += solution.newlyDamaged
+        for ((id, reading) in solution.readings) {
+            sumCurrent[id] = (sumCurrent[id] ?: 0.0) + reading.current.toDouble() * reading.current
+            sumVoltage[id] = (sumVoltage[id] ?: 0.0) + reading.voltage.toDouble() * reading.voltage
+            sumPower[id] = (sumPower[id] ?: 0.0) + reading.power.toDouble() * reading.power
+            sumMeter[id] = (sumMeter[id] ?: 0.0) + reading.meterSignedValue.toDouble() * reading.meterSignedValue
+        }
+    }
+
+    val final = last ?: CircuitSolution(epoch = epoch)
+    val readings = final.readings.mapValues { (id, reading) ->
+        fun rms(sum: Double): Float = kotlin.math.sqrt(sum / count).toFloat()
+        reading.copy(
+            current = rms(sumCurrent[id] ?: 0.0),
+            signedCurrent = rms(sumCurrent[id] ?: 0.0),
+            voltage = rms(sumVoltage[id] ?: 0.0),
+            power = rms(sumPower[id] ?: 0.0),
+            meterSignedValue = rms(sumMeter[id] ?: 0.0),
+            meterValue = rms(sumMeter[id] ?: 0.0),
+        )
+    }
+    return TransientResult(
+        solution = final.copy(
+            readings = readings,
+            totalCurrent = kotlin.math.sqrt(
+                readings.values.sumOf { (it.current * it.current).toDouble() },
+            ).toFloat(),
+            newlyDamaged = damaged,
+        ),
+        state = dynamic,
+    )
 }
 
 fun simulateTransientStep(
@@ -534,6 +603,7 @@ private fun simulateCircuitOnce(
     dynamicState: DynamicState? = null,
     dt: Float = 0.05f,
     epoch: Long = 0L,
+    timeSeconds: Float = 0f,
 ): CircuitSolution {
     if (components.isEmpty()) return CircuitSolution(epoch = epoch)
     val byId = components.associateBy { it.id }
@@ -640,13 +710,21 @@ private fun simulateCircuitOnce(
                 val r = component.effectiveInternalResistance
                 val positive = if (component.polarityFlipped) t0 else t1
                 val negative = if (component.polarityFlipped) t1 else t0
+                val instantVoltage = if (
+                    component.type == InstrumentType.POWER_SUPPLY && component.supplyAc
+                ) {
+                    (component.supplyVoltage * kotlin.math.sqrt(2.0) *
+                        kotlin.math.sin(2.0 * Math.PI * 50.0 * timeSeconds)).toFloat()
+                } else {
+                    component.voltage
+                }
                 addConductance(positive, negative, r)
-                addCurrent(negative, positive, component.voltage.toDouble() / r)
+                addCurrent(negative, positive, instantVoltage.toDouble() / r)
                 sourceBranches += SourceBranch(
                     componentId = component.id,
                     positive = positive,
                     negative = negative,
-                    voltage = component.voltage,
+                    voltage = instantVoltage,
                     internalResistance = r,
                 )
             }
@@ -857,7 +935,8 @@ private fun simulateCircuitOnce(
                 meterRange = active.range,
                 meterRangeLabel = rangeLabel,
                 meterOverRange = value > active.range * (if (isGalvanometer) 1f else 1.02f),
-                meterNegativeOverRange = !isGalvanometer && rawValue < -active.range / 6f,
+                meterNegativeOverRange = !isGalvanometer &&
+                    rawValue < -active.range / (if (component.type == InstrumentType.MILLIAMMETER) 5f else 6f),
                 meterReversed = !isGalvanometer && rawValue < -1e-9,
                 meterTerminal = active.terminal,
             )
@@ -930,8 +1009,14 @@ private fun simulateCircuitOnce(
     val closed = total > 0.000001f || hasLoopCurrent
     val shortedSources = sources.filter { source ->
         val reading = readings[source.id] ?: return@filter false
-        reading.current > 8f ||
-            (reading.current > 1f && reading.voltage < source.voltage * 0.15f)
+        val externalResistance = if (reading.current > 0.0001f) {
+            source.voltage / reading.current - source.effectiveInternalResistance
+        } else {
+            Float.MAX_VALUE
+        }
+        // 低阻负载（例如 2 Ω 电感）不是短路；只有外电路接近 0 Ω
+        // 或电流极端大时才判为电源短路。
+        reading.current > 8f || externalResistance < 0.35f
     }
     val short = shortedSources.isNotEmpty()
     val status = when {

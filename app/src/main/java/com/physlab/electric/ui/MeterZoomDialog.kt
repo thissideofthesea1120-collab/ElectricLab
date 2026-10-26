@@ -83,6 +83,7 @@ fun MeterZoomDialog(
     }
     val activeRange = reading.meterRange.takeIf { it > 0f } ?: smallMax
     val activeIsLarge = activeRange > smallMax + 0.01f
+    val negativeDivisor = if (isMilliAmmeter) 5f else 6f
     val activeValue = reading.meterSignedValue
     var answer by remember(component.id, activeRange) { mutableStateOf("") }
     var feedback by remember(component.id, activeRange) { mutableStateOf<String?>(null) }
@@ -233,8 +234,8 @@ fun MeterZoomDialog(
                         }
                         val labelInnerNeg = radius - 34f * density
                         val labelOuterNeg = radius + 34f * density
-                        val smallNegText = formatTick(-smallMax / 6f, 1)
-                        val largeNegText = formatTick(-largeMax / 6f, 1)
+                        val smallNegText = formatTick(-smallMax / negativeDivisor, 1)
+                        val largeNegText = formatTick(-largeMax / negativeDivisor, 1)
                         val smallNegColor = if (!activeIsLarge) LabColors.Primary else Color(0xFF8D7B60)
                         val largeNegColor = if (activeIsLarge) LabColors.Primary else Color(0xFF8D7B60)
                         textLabel(
@@ -298,7 +299,7 @@ fun MeterZoomDialog(
                             )
                         }
 
-                        val fraction = (activeValue / activeRange).coerceIn(-1f / 6f, 1f)
+                        val fraction = (activeValue / activeRange).coerceIn(-1f / negativeDivisor, 1f)
                         val needleAngle = Math.toRadians((startAngle + sweepAngle * fraction).toDouble())
                         val needleDir = Offset(cos(needleAngle).toFloat(), sin(needleAngle).toFloat())
                         val tip = Offset(cx + needleDir.x * (radius - 2f * density), cy + needleDir.y * (radius - 2f * density))
@@ -323,7 +324,7 @@ fun MeterZoomDialog(
                             true,
                         )
                         textLabel(
-                            "-${formatTick((if (activeIsLarge) largeMax else smallMax) / 6f, 1)}～" +
+                            "-${formatTick((if (activeIsLarge) largeMax else smallMax) / negativeDivisor, 1)}～" +
                                 "${if (activeIsLarge) largeMax else smallMax} $unit",
                             cx,
                             cy + 40f * density,
@@ -362,7 +363,7 @@ fun MeterZoomDialog(
                             fontWeight = FontWeight.Medium,
                         )
                         Text(
-                            "测量范围 -${formatNumber(activeRange / 6f)}～${formatNumber(activeRange)} $unit · 每小格 " +
+                            "测量范围 -${formatNumber(activeRange / negativeDivisor)}～${formatNumber(activeRange)} $unit · 每小格 " +
                                 String.format(
                                     java.util.Locale.US,
                                     "%.2f $unit",
