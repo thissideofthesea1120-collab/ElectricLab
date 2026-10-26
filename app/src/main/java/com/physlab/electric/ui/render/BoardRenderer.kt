@@ -660,6 +660,19 @@ private fun terminalOutflow(
             else -> null
         }
     }
+    if (component.type == InstrumentType.SPDT_SWITCH) {
+        val selected = when (component.switchPosition) {
+            0 -> 1
+            1 -> 2
+            else -> null
+        }
+        if (selected == null) return null
+        return when (terminal.index) {
+            0 -> false
+            selected -> true
+            else -> null
+        }
+    }
     if (component.type in setOf(
             InstrumentType.RESISTOR,
             InstrumentType.LAMP,
