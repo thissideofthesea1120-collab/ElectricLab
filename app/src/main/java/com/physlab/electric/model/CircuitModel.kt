@@ -800,7 +800,8 @@ private fun simulateCircuitOnce(
                     val g = dt / inductance
                     val previous = dynamicState.inductorCurrents[component.id] ?: 0f
                     addConductance(t0, t1, inductance / dt)
-                    addCurrent(t1, t0, previous.toDouble())
+                    // 电感支路电流方向为 t0 -> t1；初始电流应作为该方向的源注入。
+                    addCurrent(t0, t1, previous.toDouble())
                     dynamicBranches += DynamicBranch(
                         component.id, t0, t1, false, g, previous,
                     )

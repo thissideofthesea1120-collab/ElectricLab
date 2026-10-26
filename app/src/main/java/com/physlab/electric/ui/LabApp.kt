@@ -235,12 +235,21 @@ fun LabApp(
     LaunchedEffect(solution.newlyDamaged, solution.epoch, editor.topologyEpoch) {
         if (solution.epoch != editor.topologyEpoch) return@LaunchedEffect
         if (solution.newlyDamaged.isNotEmpty()) {
-            editor.applyDamage(
-                solution.newlyDamaged,
-                solution.reversedMeters,
-                solution.overRangeMeters,
-                solution.negativeOverRangeMeters,
-            )
+            val safeDamage = solution.newlyDamaged.filter { id ->
+                val type = editor.components.firstOrNull { it.id == id }?.type
+                val isSource = type == InstrumentType.BATTERY ||
+                    type == InstrumentType.POWER_SUPPLY ||
+                    type == InstrumentType.STORAGE_BATTERY
+                !isSource || solution.status == CircuitStatus.SHORT
+            }.toSet()
+            if (safeDamage.isNotEmpty()) {
+                editor.applyDamage(
+                    safeDamage,
+                    solution.reversedMeters,
+                    solution.overRangeMeters,
+                    solution.negativeOverRangeMeters,
+                )
+            }
         }
     }
 
