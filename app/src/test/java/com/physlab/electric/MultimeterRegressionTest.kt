@@ -116,4 +116,21 @@ class MultimeterRegressionTest {
         println("MM ACV display=${result.solution.readings[3]?.multimeterDisplay}")
         check(result.solution.readings[3]?.multimeterDisplay?.endsWith("V") == true)
     }
+
+    @Test
+    fun unconnectedSourceDoesNotWarn() {
+        val battery = PlacedInstrument(1, InstrumentType.BATTERY, Offset(0f, 0f), batteryCells = 1)
+        val resistor = PlacedInstrument(2, InstrumentType.RESISTOR, Offset(100f, 0f), resistance = 10f)
+        val mm = PlacedInstrument(
+            3, InstrumentType.MULTIMETER, Offset(200f, 0f),
+            multimeterMode = MultimeterMode.RESISTANCE, multimeterRangeIndex = 0,
+        )
+        val wires = listOf(
+            WireSegment(10, TerminalRef(2, 0), TerminalRef(3, 1), WireColor.RED),
+            WireSegment(11, TerminalRef(2, 1), TerminalRef(3, 0), WireColor.BLACK),
+        )
+        val s = simulateCircuit(listOf(battery, resistor, mm), wires, DynamicState(), 0.05f)
+        println("MM UNCONNECTED display=${s.readings[3]?.multimeterDisplay}")
+        check(s.readings[3]?.multimeterDisplay == "10.0 Ω")
+    }
 }

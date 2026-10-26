@@ -1089,42 +1089,6 @@ private fun DrawScope.drawMultimeter(visual: InstrumentVisual) {
         textLabel("OL", 30f, -36f, 5.2f, Color(0xFFFFB4A8), true)
     }
 
-    // Small analog pointer under the LCD
-    val pivot = Offset(0f, 5f)
-    drawArc(
-        color = Color(0xFF68768B),
-        startAngle = 200f,
-        sweepAngle = 140f,
-        useCenter = false,
-        topLeft = Offset(pivot.x - 30f, pivot.y - 30f),
-        size = Size(60f, 60f),
-        style = Stroke(0.9f),
-    )
-    for (i in 0..10) {
-        val angle = Math.toRadians((200f + 14f * i).toDouble())
-        val inner = if (i % 5 == 0) 24f else 27f
-        drawLine(
-            Color(0xFFB8C6D8),
-            Offset(pivot.x + cos(angle).toFloat() * inner, pivot.y + sin(angle).toFloat() * inner),
-            Offset(pivot.x + cos(angle).toFloat() * 30f, pivot.y + sin(angle).toFloat() * 30f),
-            0.7f,
-            StrokeCap.Round,
-        )
-    }
-    val fraction = (visual.meterFraction ?: 0f).coerceIn(0f, 1f)
-    val needleAngle = Math.toRadians((200f + 140f * fraction).toDouble())
-    drawLine(
-        Color(0xFFD83942),
-        pivot,
-        Offset(
-            pivot.x + cos(needleAngle).toFloat() * 25f,
-            pivot.y + sin(needleAngle).toFloat() * 25f,
-        ),
-        1.4f,
-        StrokeCap.Round,
-    )
-    drawCircle(Color(0xFF151B24), 3f, pivot)
-
     // Rotary range switch
     drawCircle(Color(0xFF202833), 12f, Offset(0f, 31f))
     drawCircle(Color(0xFF0C1016), 9f, Offset(0f, 31f))

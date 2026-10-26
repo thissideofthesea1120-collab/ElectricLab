@@ -696,7 +696,11 @@ private fun attachMultimeterMeasurements(
 ): CircuitSolution {
     val meters = components.filter { it.type == InstrumentType.MULTIMETER }
     if (meters.isEmpty()) return result
-    val powered = components.any { it.type.isPowerSource && !it.damaged }
+    val powered = components.any { source ->
+        source.type.isPowerSource && !source.damaged && wires.any { wire ->
+            wire.a.componentId == source.id || wire.b.componentId == source.id
+        }
+    }
     val readings = result.readings.toMutableMap()
     for (meter in meters) {
         val range = meter.multimeterRangeValue

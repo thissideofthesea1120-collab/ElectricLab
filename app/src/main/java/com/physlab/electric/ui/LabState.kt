@@ -1829,22 +1829,38 @@ class LabEditorState {
                 val resistor = PlacedInstrument(
                     id = nextId++,
                     type = InstrumentType.RESISTOR,
-                    center = Offset(start + usable * 0.48f, middle),
+                    center = Offset(start + usable * 0.42f, middle),
                     label = "Rx",
                     resistance = 10f,
                 )
                 val multimeter = PlacedInstrument(
                     id = nextId++,
                     type = InstrumentType.MULTIMETER,
-                    center = Offset(start + usable * 0.70f, bottom),
+                    center = Offset(start + usable * 0.68f, middle),
                     label = "M",
                     multimeterMode = MultimeterMode.RESISTANCE,
                     multimeterRangeIndex = 0,
                 )
                 components = listOf(resistor, multimeter)
+                val lowerY = middle + 58f
+                val upperY = middle - 8f
                 wires = listOf(
-                    WireSegment(nextId++, TerminalRef(resistor.id, 0), TerminalRef(multimeter.id, 1), WireColor.RED),
-                    WireSegment(nextId++, TerminalRef(resistor.id, 1), TerminalRef(multimeter.id, 0), WireColor.BLACK),
+                    WireSegment(
+                        nextId++, TerminalRef(resistor.id, 0), TerminalRef(multimeter.id, 0),
+                        WireColor.RED,
+                        listOf(
+                            Offset(resistor.center.x, lowerY),
+                            Offset(multimeter.center.x - 45f, lowerY),
+                        ),
+                    ),
+                    WireSegment(
+                        nextId++, TerminalRef(resistor.id, 1), TerminalRef(multimeter.id, 1),
+                        WireColor.BLACK,
+                        listOf(
+                            Offset(resistor.center.x + 35f, upperY),
+                            Offset(multimeter.center.x, upperY),
+                        ),
+                    ),
                 )
             }
 
