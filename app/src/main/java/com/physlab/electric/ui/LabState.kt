@@ -992,6 +992,7 @@ class LabEditorState {
         val component = components.firstOrNull { it.id == id } ?: return
         if (!component.damaged) return
         pushHistory()
+        topologyEpoch += 1
         components = components.map {
             if (it.id == id) it.copy(damaged = false) else it
         }
