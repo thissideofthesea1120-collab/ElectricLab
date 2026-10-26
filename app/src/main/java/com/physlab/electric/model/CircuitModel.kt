@@ -1400,9 +1400,9 @@ private fun simulateCircuitOnce(
 
     val total = kotlin.math.abs(totalBatteryCurrent).toFloat()
     val hasLoopCurrent = readings.values.any {
-        kotlin.math.abs(it.signedCurrent) > 0.000001f
+        kotlin.math.abs(it.signedCurrent) > 0.00001f
     }
-    val closed = total > 0.000001f || hasLoopCurrent
+    val closed = total > 0.00001f || hasLoopCurrent
     val shortedSources = sources.filter { source ->
         val reading = readings[source.id] ?: return@filter false
         val externalResistance = if (reading.current > 0.0001f) {
