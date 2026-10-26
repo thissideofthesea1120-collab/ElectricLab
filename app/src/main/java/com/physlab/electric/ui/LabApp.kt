@@ -749,16 +749,15 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.4.0", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.4.1", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.4.0 · 多用电表\n\n" +
-                            "• 新增 DCV / ACV / DCA / ACA / 电阻 / 二极管档\n" +
-                            "• 数字 LCD 显示\n" +
-                            "• 电压、电流、电阻、二极管测量\n" +
-                            "• 电阻档带电时提示“请断电测量”\n" +
-                            "• 新增多用电表测电阻模板\n" +
-                            "• 保留并联方向、电感、AC、蜂鸣器语音修正",
+                        "2.4.1 · 仪器旋转\n\n" +
+                            "• 所有仪器可旋转（电池组、灯泡、电阻、开关、电容、电感、电动机、蜂鸣器、磁体等）\n" +
+                            "• 多用电表、其他电表、学生电源、小磁针、回形针不可旋转\n" +
+                            "• 详情页增加旋转滑杆和快捷角度\n" +
+                            "• 仪器上方绿色手柄可拖动旋转\n" +
+                            "• 保留 v2.4.0 多用电表和各项修正",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,

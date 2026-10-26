@@ -18,6 +18,7 @@ import com.physlab.electric.model.WireColor
 import com.physlab.electric.model.WireSegment
 import com.physlab.electric.model.isMagnet
 import com.physlab.electric.model.isMeter
+import com.physlab.electric.model.isRotatable
 import com.physlab.electric.model.isPowerSource
 import org.json.JSONArray
 import org.json.JSONObject
@@ -270,6 +271,7 @@ class LabEditorState {
 
     fun setRotation(id: Long, degrees: Float) {
         val component = components.firstOrNull { it.id == id } ?: return
+        if (!component.type.isRotatable) return
         pushHistory()
         updateRotationLive(id, degrees)
         toast = "${component.type.displayName}已旋转 ${normalizedRotation(degrees).toInt()}°"
@@ -278,7 +280,7 @@ class LabEditorState {
     fun updateRotationLive(id: Long, degrees: Float) {
         val value = normalizedRotation(degrees)
         components = components.map {
-            if (it.id == id && it.type.isMagnet) it.copy(rotation = value) else it
+            if (it.id == id && it.type.isRotatable) it.copy(rotation = value) else it
         }
     }
 

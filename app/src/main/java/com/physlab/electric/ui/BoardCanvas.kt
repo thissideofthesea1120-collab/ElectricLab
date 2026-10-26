@@ -51,7 +51,7 @@ import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.Selection
 import com.physlab.electric.model.TerminalRef
 import com.physlab.electric.model.WireSegment
-import com.physlab.electric.model.isMagnet
+import com.physlab.electric.model.isRotatable
 import com.physlab.electric.ui.render.BoardScene
 import com.physlab.electric.ui.render.drawBoard
 import com.physlab.electric.ui.render.rotationHandlePosition
@@ -149,7 +149,7 @@ fun LabBoard(
 
                     fun hitRotationHandle(position: Offset): PlacedInstrument? {
                         val component = editor.selectedComponent ?: return null
-                        if (!component.type.isMagnet) return null
+                        if (!component.type.isRotatable) return null
                         return if ((rotationHandlePosition(component) - position).getDistance() <= 22f) {
                             component
                         } else {

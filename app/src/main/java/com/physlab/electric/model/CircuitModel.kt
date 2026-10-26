@@ -427,6 +427,12 @@ val InstrumentType.isMeter: Boolean
         this == InstrumentType.MILLIAMMETER ||
         this == InstrumentType.MULTIMETER
 
+val InstrumentType.isRotatable: Boolean
+    get() = !isMeter &&
+        this != InstrumentType.POWER_SUPPLY &&
+        this != InstrumentType.COMPASS &&
+        this != InstrumentType.PAPERCLIPS
+
 fun PlacedInstrument.ratedPower(): Float? = when (type) {
     InstrumentType.LAMP, InstrumentType.TEMP_LAMP -> lampSpec.ratedPower
     InstrumentType.MOTOR -> 4.5f * 4.5f / 12f

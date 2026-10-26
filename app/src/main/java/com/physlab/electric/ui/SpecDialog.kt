@@ -49,6 +49,7 @@ import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.ResistanceWireSamples
 import com.physlab.electric.model.isMagnet
 import com.physlab.electric.model.isMeter
+import com.physlab.electric.model.isRotatable
 import com.physlab.electric.model.isPowerSource
 import com.physlab.electric.ui.render.formatAmmeter
 import com.physlab.electric.ui.render.formatCurrent
@@ -82,6 +83,9 @@ fun InstrumentSpecDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (component.type.isRotatable) {
+                    RotationEditor(editor, component)
+                }
                 when (component.type) {
                     InstrumentType.BATTERY -> {
                         if (component.specLocked) {
@@ -332,38 +336,6 @@ fun InstrumentSpecDialog(
                         }
                         Text(
                             "翻转磁极会改变磁体之间的吸引/排斥关系。",
-                            color = LabColors.InkFaint,
-                            fontSize = 9.sp,
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("旋转角度", color = LabColors.InkMuted, fontSize = 10.sp)
-                            Spacer(Modifier.weight(1f))
-                            Text(
-                                "${component.rotation.toInt()}°",
-                                color = LabColors.Primary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                        Slider(
-                            value = component.rotation,
-                            onValueChange = { editor.updateRotationLive(component.id, it) },
-                            valueRange = 0f..360f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = LabColors.Primary,
-                                activeTrackColor = LabColors.Primary,
-                                inactiveTrackColor = LabColors.SurfaceHigh,
-                            ),
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (angle in listOf(0f, 45f, 90f, 180f)) {
-                                OptionChip("${angle.toInt()}°", kotlin.math.abs(component.rotation - angle) < 0.5f) {
-                                    editor.setRotation(component.id, angle)
-                                }
-                            }
-                        }
-                        Text(
-                            "也可以拖动仪器上方的绿色旋转手柄。",
                             color = LabColors.InkFaint,
                             fontSize = 9.sp,
                         )
@@ -841,6 +813,42 @@ private fun InternalResistanceEditor(editor: LabEditorState, component: PlacedIn
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
     }
+}
+
+@Composable
+private fun RotationEditor(editor: LabEditorState, component: PlacedInstrument) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("旋转角度", color = LabColors.InkMuted, fontSize = 10.sp)
+        Spacer(Modifier.weight(1f))
+        Text(
+            "${component.rotation.toInt()}°",
+            color = LabColors.Primary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+    Slider(
+        value = component.rotation,
+        onValueChange = { editor.updateRotationLive(component.id, it) },
+        valueRange = 0f..360f,
+        colors = SliderDefaults.colors(
+            thumbColor = LabColors.Primary,
+            activeTrackColor = LabColors.Primary,
+            inactiveTrackColor = LabColors.SurfaceHigh,
+        ),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (angle in listOf(0f, 45f, 90f, 180f)) {
+            OptionChip("${angle.toInt()}°", kotlin.math.abs(component.rotation - angle) < 0.5f) {
+                editor.setRotation(component.id, angle)
+            }
+        }
+    }
+    Text(
+        "也可以拖动仪器上方的绿色旋转手柄。",
+        color = LabColors.InkFaint,
+        fontSize = 9.sp,
+    )
 }
 
 @Composable

@@ -24,6 +24,7 @@ import com.physlab.electric.model.TerminalRef
 import com.physlab.electric.model.WireColor
 import com.physlab.electric.model.WireSegment
 import com.physlab.electric.model.isMagnet
+import com.physlab.electric.model.isRotatable
 import com.physlab.electric.model.isMeter
 import com.physlab.electric.model.isPowerSource
 import com.physlab.electric.ui.LabColors
@@ -310,9 +311,9 @@ fun DrawScope.drawBoard(scene: BoardScene, density: Float) {
         }
     }
 
-    // Rotation handle for magnet instruments.
+    // Rotation handle for rotatable instruments.
     val rotationTarget = scene.components.firstOrNull {
-        it.id == scene.selection.componentId && it.type.isMagnet
+        it.id == scene.selection.componentId && it.type.isRotatable
     }
     if (rotationTarget != null) {
         val center = rotationTarget.center * density
