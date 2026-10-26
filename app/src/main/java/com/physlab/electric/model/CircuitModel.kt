@@ -751,7 +751,9 @@ private fun attachMultimeterMeasurements(
     for (meter in meters) {
         val range = meter.multimeterRangeValue
         if (meter.multimeterIsVoltage || meter.multimeterIsCurrent) continue
-        val powered = sourceConnectedToProbes(
+        val powered = components.any {
+            it.type.isPowerSource && !it.damaged && (result.readings[it.id]?.current ?: 0f) > 0.00001f
+        } && sourceConnectedToProbes(
             components,
             wires,
             TerminalRef(meter.id, 1),
