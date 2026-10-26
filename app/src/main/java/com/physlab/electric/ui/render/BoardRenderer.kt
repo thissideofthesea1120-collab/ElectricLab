@@ -669,6 +669,8 @@ private fun terminalOutflow(
             InstrumentType.LED,
             InstrumentType.ELECTROMAGNET,
             InstrumentType.SOLENOID,
+            InstrumentType.INDUCTOR,
+            InstrumentType.CAPACITOR,
             InstrumentType.SWITCH,
             InstrumentType.RHEOSTAT,
             InstrumentType.RESISTANCE_BOX,

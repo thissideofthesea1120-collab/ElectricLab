@@ -44,8 +44,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.MediaPlayer
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +71,7 @@ import com.physlab.electric.model.CircuitStatus
 import com.physlab.electric.model.InstrumentType
 import com.physlab.electric.model.PlacedInstrument
 import com.physlab.electric.model.Selection
+import com.physlab.electric.R
 import com.physlab.electric.model.WireColor
 import com.physlab.electric.model.WireSegment
 import com.physlab.electric.model.DynamicState
@@ -272,19 +273,31 @@ fun LabApp(
     val buzzerRatio = (editor.components
         .filter { it.type == InstrumentType.BUZZER }
         .maxOfOrNull { solution.readings[it.id]?.power ?: 0f } ?: 0f) / (4.5f * 4.5f / 30f)
-    val buzzerLevel = (22f + 78f * buzzerRatio.coerceIn(0f, 1.5f)).toInt().coerceIn(22, 100)
-    val buzzerPeriod = (560f - 380f * buzzerRatio.coerceIn(0f, 1.5f)).toLong().coerceIn(180L, 560L)
-    LaunchedEffect(buzzerActive, buzzerMuted, buzzerLevel, buzzerPeriod) {
+    val buzzerVolume = (0.55f + 0.35f * buzzerRatio.coerceIn(0f, 1.5f)).coerceIn(0.5f, 1f)
+    val buzzerPlayer = remember { MediaPlayer() }
+    DisposableEffect(Unit) {
+        onDispose { runCatching { buzzerPlayer.release() } }
+    }
+    LaunchedEffect(buzzerActive, buzzerMuted, buzzerVolume) {
+        runCatching { buzzerPlayer.reset() }
         if (!buzzerActive || buzzerMuted) return@LaunchedEffect
-        val tone = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, buzzerLevel) }.getOrNull()
-            ?: return@LaunchedEffect
         try {
             while (true) {
-                tone.startTone(ToneGenerator.TONE_PROP_BEEP, if (buzzerLevel > 70) 180 else 130)
-                delay(buzzerPeriod)
+                buzzerPlayer.reset()
+                val afd = context.resources.openRawResourceFd(R.raw.buzzer_physics)
+                    ?: break
+                buzzerPlayer.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
+                buzzerPlayer.setVolume(buzzerVolume, buzzerVolume)
+                buzzerPlayer.prepare()
+                buzzerPlayer.start()
+                while (buzzerPlayer.isPlaying) delay(50)
+                delay(1000)
             }
+        } catch (_: Exception) {
+            // 音频资源不可用时保持静音，不影响电路实验。
         } finally {
-            runCatching { tone.release() }
+            runCatching { buzzerPlayer.stop() }
         }
     }
 
