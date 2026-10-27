@@ -49,6 +49,7 @@ import com.physlab.electric.model.FieldCharge
 import com.physlab.electric.model.FieldEngine
 import com.physlab.electric.model.FieldParticle
 import com.physlab.electric.model.ParallelPlate
+import com.physlab.electric.model.ParticleKind
 import com.physlab.electric.model.UniformField
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -74,6 +75,10 @@ class FieldEditorState {
                 label = "P1",
                 initialPosition = Offset(0.50f, 0.22f),
                 initialVelocity = Offset(0.12f, 0f),
+                kind = ParticleKind.PROTON,
+                chargeElementary = 1f,
+                massKg = 1.67e-27f,
+                effectiveMass = 4f,
             ),
         ),
     )
@@ -112,7 +117,7 @@ class FieldEditorState {
             width = 0.42f,
             height = 0.28f,
             directionDegrees = 0f,
-            strength = 0.22f,
+            strength = 0.05f,
             label = "E${uniformFields.size + 1}",
         )
         uniformFields = uniformFields + field
@@ -130,6 +135,7 @@ class FieldEditorState {
             separation = 0.18f,
             length = 0.46f,
             voltage = 12f,
+            width = 0.05f,
             label = "板${parallelPlates.size + 1}",
         )
         parallelPlates = parallelPlates + plate
@@ -139,15 +145,28 @@ class FieldEditorState {
         selectedParticleId = null
     }
 
-    fun addParticle(sign: Float) {
+    fun addParticle(kind: ParticleKind) {
+        val (charge, massKg, effectiveMass, label) = when (kind) {
+            ParticleKind.ELECTRON -> Quad(-1f, 9.11e-31f, 1f, "e⁻")
+            ParticleKind.PROTON -> Quad(1f, 1.67e-27f, 4f, "p⁺")
+            ParticleKind.ALPHA -> Quad(2f, 6.64e-27f, 8f, "α")
+            ParticleKind.CUSTOM -> Quad(1f, 1.67e-27f, 4f, "P${particles.size + 1}")
+        }
+        val start = Offset(0.50f, 0.20f)
+        val velocity = Offset(0.15f, 0f)
         val particle = FieldParticle(
             id = nextId++,
-            position = Offset(0.50f, 0.20f),
-            velocity = Offset(0.15f, 0f),
-            chargeMicroC = sign,
-            label = "P${particles.size + 1}",
-            initialPosition = Offset(0.50f, 0.20f),
-            initialVelocity = Offset(0.15f, 0f),
+            position = start,
+            velocity = velocity,
+            chargeMicroC = charge,
+            mass = effectiveMass,
+            label = label,
+            initialPosition = start,
+            initialVelocity = velocity,
+            kind = kind,
+            chargeElementary = charge,
+            massKg = massKg,
+            effectiveMass = effectiveMass,
         )
         particles = particles + particle
         selectedParticleId = particle.id
@@ -155,6 +174,10 @@ class FieldEditorState {
         selectedUniformFieldId = null
         selectedParallelPlateId = null
         initialParticles = particles
+    }
+
+    fun addParticle(sign: Float) {
+        addParticle(ParticleKind.CUSTOM)
     }
 
     fun selectAt(point: Offset) {
@@ -210,13 +233,25 @@ class FieldEditorState {
 
     fun updateSelectedPlateVoltage(value: Float) {
         val id = selectedParallelPlateId ?: return
-        parallelPlates = parallelPlates.map { if (it.id == id) it.copy(voltage = value.coerceIn(-30f, 30f)) else it }
+        parallelPlates = parallelPlates.map { if (it.id == id) it.copy(voltage = value.coerceIn(-600f, 600f)) else it }
+    }
+
+    fun updateSelectedPlateField(valueVPerM: Float) {
+        val id = selectedParallelPlateId ?: return
+        parallelPlates = parallelPlates.map {
+            if (it.id == id) {
+                val dCm = it.separation * 25f
+                it.copy(voltage = (valueVPerM * dCm / 100f).coerceIn(-600f, 600f))
+            } else {
+                it
+            }
+        }
     }
 
     fun updateSelectedPlateSeparation(value: Float) {
         val id = selectedParallelPlateId ?: return
         parallelPlates = parallelPlates.map {
-            if (it.id == id) it.copy(separation = value.coerceIn(0.06f, 0.35f)) else it
+            if (it.id == id) it.copy(separation = value.coerceIn(0.04f, 0.40f)) else it
         }
     }
 
@@ -227,9 +262,33 @@ class FieldEditorState {
         }
     }
 
-    fun updateSelectedUniformStrength(value: Float) {
+    fun updateSelectedPlateWidth(value: Float) {
+        val id = selectedParallelPlateId ?: return
+        parallelPlates = parallelPlates.map {
+            if (it.id == id) it.copy(width = value.coerceIn(0.02f, 0.12f)) else it
+        }
+    }
+
+    fun updateSelectedPlateRotation(value: Float) {
+        val id = selectedParallelPlateId ?: return
+        parallelPlates = parallelPlates.map { if (it.id == id) it.copy(rotation = value) else it }
+    }
+
+    fun updateSelectedUniformWidth(value: Float) {
         val id = selectedUniformFieldId ?: return
-        uniformFields = uniformFields.map { if (it.id == id) it.copy(strength = value.coerceIn(0f, 0.6f)) else it }
+        uniformFields = uniformFields.map { if (it.id == id) it.copy(width = value.coerceIn(0.2f, 0.8f)) else it }
+    }
+
+    fun updateSelectedUniformHeight(value: Float) {
+        val id = selectedUniformFieldId ?: return
+        uniformFields = uniformFields.map { if (it.id == id) it.copy(height = value.coerceIn(0.15f, 0.7f)) else it }
+    }
+
+    fun updateSelectedUniformStrengthVPerM(value: Float) {
+        val id = selectedUniformFieldId ?: return
+        uniformFields = uniformFields.map {
+            if (it.id == id) it.copy(strength = (value / 10000f).coerceIn(0.01f, 1f)) else it
+        }
     }
 
     fun updateSelectedUniformDirection(value: Float) {
@@ -416,7 +475,12 @@ private fun FieldCanvas(state: FieldEditorState, modifier: Modifier = Modifier) 
                     drawPath(path, Color(0xFF89E8FF).copy(alpha = 0.55f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.4f))
                 }
                 val p = particle.position.toCanvas(size)
-                val color = if (particle.chargeMicroC >= 0f) Color(0xFFFFE08A) else Color(0xFF9DDBFF)
+                val color = when (particle.kind) {
+                    ParticleKind.ELECTRON -> Color(0xFF62B8FF)
+                    ParticleKind.PROTON -> Color(0xFFFF8A72)
+                    ParticleKind.ALPHA -> Color(0xFFC59BFF)
+                    ParticleKind.CUSTOM -> if (particle.chargeMicroC >= 0f) Color(0xFFFFE08A) else Color(0xFF9DDBFF)
+                }
                 drawCircle(color.copy(alpha = 0.22f), 18f, p)
                 drawCircle(color, 8f, p)
                 drawCircle(
@@ -480,7 +544,7 @@ private fun DrawScope.drawUniformFields(fields: List<UniformField>) {
             }
         }
         drawFieldText(
-            "E ${String.format(java.util.Locale.US, "%.2f", field.strength)}",
+            "E ${(field.strength * 10000f).toInt()} V/m",
             center + Offset(0f, height / 2f + 16f),
             Color(0xFF9BEAF3),
         )
@@ -492,11 +556,12 @@ private fun DrawScope.drawParallelPlates(plates: List<ParallelPlate>) {
         val center = plate.center.toCanvas(size)
         val length = plate.length * size.width
         val separation = plate.separation * size.height
+        val thickness = (plate.width * size.height).coerceAtLeast(2f)
         withTransform({ rotate(plate.rotation, pivot = center) }) {
             val top = center.y - separation / 2f
             val bottom = center.y + separation / 2f
-            drawLine(Color(0xFFFF6B72), Offset(center.x - length / 2f, top), Offset(center.x + length / 2f, top), 4f)
-            drawLine(Color(0xFF5AB6FF), Offset(center.x - length / 2f, bottom), Offset(center.x + length / 2f, bottom), 4f)
+            drawLine(Color(0xFFFF6B72), Offset(center.x - length / 2f, top), Offset(center.x + length / 2f, top), thickness)
+            drawLine(Color(0xFF5AB6FF), Offset(center.x - length / 2f, bottom), Offset(center.x + length / 2f, bottom), thickness)
             for (i in 1..4) {
                 val x = center.x - length / 2f + length * i / 5f
                 drawLine(
@@ -505,10 +570,17 @@ private fun DrawScope.drawParallelPlates(plates: List<ParallelPlate>) {
                     Offset(x, bottom - 5f),
                     1.2f,
                 )
+                drawFieldLineArrow(
+                    Offset(x, bottom - 7f),
+                    Offset(0f, if (plate.voltage >= 0f) -1f else 1f),
+                    Color(0xFF7CE4F2).copy(alpha = 0.7f),
+                )
             }
         }
+        val dCm = plate.separation * 25f
+        val eValue = if (dCm > 0.01f) plate.voltage / (dCm / 100f) else 0f
         drawFieldText(
-            "${plate.label}  ${String.format(java.util.Locale.US, "%.1f", plate.voltage)} V",
+            "${plate.label}  ${String.format(java.util.Locale.US, "%.1f", plate.voltage)} V  ·  E ${eValue.toInt()} V/m",
             center + Offset(0f, separation / 2f + 18f),
             Color(0xFFDCE9F6),
         )
@@ -595,6 +667,8 @@ private fun Offset.toCanvas(size: androidx.compose.ui.geometry.Size): Offset =
 
 private fun Float.format1(): String = String.format(java.util.Locale.US, "%.1f", this)
 
+private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
 @Composable
 private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
     Column(
@@ -609,16 +683,20 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
             FieldButton("+ 正电荷") { state.addCharge(1f) }
             FieldButton("− 负电荷") { state.addCharge(-1f) }
         }
-        Text("添加试探粒子", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+
+        Text("添加粒子", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FieldButton("+ 试探粒子") { state.addParticle(1f) }
-            FieldButton("− 试探粒子") { state.addParticle(-1f) }
+            FieldButton("电子") { state.addParticle(ParticleKind.ELECTRON) }
+            FieldButton("质子") { state.addParticle(ParticleKind.PROTON) }
+            FieldButton("α粒子") { state.addParticle(ParticleKind.ALPHA) }
         }
+
         Text("添加场", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldButton("+ 匀强电场") { state.addUniformField() }
             FieldButton("+ 平行板") { state.addParallelPlate() }
         }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldButton(if (state.showFieldLines) "隐藏电场线" else "显示电场线", primary = state.showFieldLines) {
                 state.showFieldLines = !state.showFieldLines
@@ -627,6 +705,7 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
                 state.showForces = !state.showForces
             }
         }
+
         val selectedCharge = state.charges.firstOrNull { it.id == state.selectedChargeId }
         if (selectedCharge != null) {
             Text("${selectedCharge.label} 电荷量", color = LabColors.InkMuted, fontSize = 11.sp)
@@ -641,44 +720,64 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
                 valueRange = -5f..5f,
             )
             FieldButton("删除电荷") { state.removeSelected() }
-        } else {
-            Text("拖动电荷可选中；选中后可调电荷量。", color = LabColors.InkFaint, fontSize = 10.sp)
         }
+
         val selectedParticle = state.particles.firstOrNull { it.id == state.selectedParticleId }
         if (selectedParticle != null) {
-            Text("${selectedParticle.label} 试探粒子", color = LabColors.InkMuted, fontSize = 11.sp)
+            val kindText = when (selectedParticle.kind) {
+                ParticleKind.ELECTRON -> "电子 e⁻"
+                ParticleKind.PROTON -> "质子 p⁺"
+                ParticleKind.ALPHA -> "α粒子"
+                ParticleKind.CUSTOM -> "自定义粒子"
+            }
+            Text("$kindText ${selectedParticle.label}", color = LabColors.InkMuted, fontSize = 11.sp)
             Text(
-                "电荷 ${if (selectedParticle.chargeMicroC >= 0f) "+" else "−"}${abs(selectedParticle.chargeMicroC).format1()} μC",
+                "电荷 ${if (selectedParticle.chargeElementary >= 0f) "+" else "−"}${abs(selectedParticle.chargeElementary).format1()}e" +
+                    " · 质量 ${String.format(java.util.Locale.US, "%.2e", selectedParticle.massKg)} kg",
                 color = Color(0xFFFFE08A),
-                fontSize = 11.sp,
+                fontSize = 10.sp,
             )
-            FieldButton("删除粒子") { state.removeSelected() }
             val speed = selectedParticle.velocity.getDistance()
-            val angle = Math.toDegrees(
+            val rawAngle = Math.toDegrees(
                 atan2(selectedParticle.velocity.y.toDouble(), selectedParticle.velocity.x.toDouble()),
             ).toFloat()
+            val signedAngle = if (rawAngle > 180f) rawAngle - 360f else rawAngle
             Text("初速度 ${String.format(java.util.Locale.US, "%.2f", speed)}", color = LabColors.InkMuted, fontSize = 10.sp)
             Slider(
                 value = speed,
-                onValueChange = { state.updateSelectedParticleVelocity(it, angle) },
+                onValueChange = { state.updateSelectedParticleVelocity(it, signedAngle) },
                 valueRange = 0f..0.8f,
             )
-            Text("初速度方向 ${angle.toInt()}°", color = LabColors.InkMuted, fontSize = 10.sp)
+            Text("初速度方向 ${if (signedAngle >= 0f) "+" else ""}${signedAngle.toInt()}°", color = LabColors.InkMuted, fontSize = 10.sp)
             Slider(
-                value = angle,
+                value = signedAngle,
                 onValueChange = { state.updateSelectedParticleVelocity(speed, it) },
-                valueRange = 0f..360f,
+                valueRange = -180f..180f,
             )
+            FieldButton("删除粒子") { state.removeSelected() }
         }
 
         val selectedUniform = state.uniformFields.firstOrNull { it.id == state.selectedUniformFieldId }
         if (selectedUniform != null) {
             Text("${selectedUniform.label} 匀强电场", color = LabColors.InkMuted, fontSize = 11.sp)
-            Text("场强 ${String.format(java.util.Locale.US, "%.2f", selectedUniform.strength)}", color = Color(0xFF9BEAF3), fontSize = 10.sp)
+            val eValue = selectedUniform.strength * 10000f
+            Text("场强 ${eValue.toInt()} V/m", color = Color(0xFF9BEAF3), fontSize = 10.sp)
             Slider(
-                value = selectedUniform.strength,
-                onValueChange = { state.updateSelectedUniformStrength(it) },
-                valueRange = 0f..0.6f,
+                value = eValue,
+                onValueChange = { state.updateSelectedUniformStrengthVPerM(it) },
+                valueRange = 100f..10000f,
+            )
+            Text("宽度 ${(selectedUniform.width * 100).toInt()}%", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = selectedUniform.width,
+                onValueChange = { state.updateSelectedUniformWidth(it) },
+                valueRange = 0.2f..0.8f,
+            )
+            Text("高度 ${(selectedUniform.height * 100).toInt()}%", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = selectedUniform.height,
+                onValueChange = { state.updateSelectedUniformHeight(it) },
+                valueRange = 0.15f..0.7f,
             )
             Text("方向 ${selectedUniform.directionDegrees.toInt()}°", color = LabColors.InkMuted, fontSize = 10.sp)
             Slider(
@@ -692,43 +791,58 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
         val selectedPlate = state.parallelPlates.firstOrNull { it.id == state.selectedParallelPlateId }
         if (selectedPlate != null) {
             Text("${selectedPlate.label} 平行板", color = LabColors.InkMuted, fontSize = 11.sp)
+            val dCm = selectedPlate.separation * 25f
+            val eValue = if (dCm > 0.01f) selectedPlate.voltage / (dCm / 100f) else 0f
             Text(
-                "电压 ${String.format(java.util.Locale.US, "%.1f", selectedPlate.voltage)} V",
+                "电压 ${String.format(java.util.Locale.US, "%.1f", selectedPlate.voltage)} V" +
+                    " · 场强 ${eValue.toInt()} V/m",
                 color = Color(0xFFDCE9F6),
                 fontSize = 10.sp,
             )
+            Text("电压 U", color = LabColors.InkMuted, fontSize = 10.sp)
             Slider(
                 value = selectedPlate.voltage,
                 onValueChange = { state.updateSelectedPlateVoltage(it) },
-                valueRange = -30f..30f,
+                valueRange = -600f..600f,
             )
-            Text(
-                "板间距 ${String.format(java.util.Locale.US, "%.2f", selectedPlate.separation)}",
-                color = LabColors.InkMuted,
-                fontSize = 10.sp,
+            Text("场强 E", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = eValue.coerceIn(0f, 10000f),
+                onValueChange = { state.updateSelectedPlateField(it) },
+                valueRange = 0f..10000f,
             )
+            Text("板间距 ${String.format(java.util.Locale.US, "%.1f", dCm)} cm", color = LabColors.InkMuted, fontSize = 10.sp)
             Slider(
                 value = selectedPlate.separation,
                 onValueChange = { state.updateSelectedPlateSeparation(it) },
-                valueRange = 0.06f..0.35f,
+                valueRange = 0.04f..0.40f,
             )
-            Text(
-                "板长 ${String.format(java.util.Locale.US, "%.2f", selectedPlate.length)}",
-                color = LabColors.InkMuted,
-                fontSize = 10.sp,
-            )
+            Text("板长 ${String.format(java.util.Locale.US, "%.1f", selectedPlate.length * 25f)} cm", color = LabColors.InkMuted, fontSize = 10.sp)
             Slider(
                 value = selectedPlate.length,
                 onValueChange = { state.updateSelectedPlateLength(it) },
                 valueRange = 0.15f..0.8f,
             )
+            Text("板宽 ${(selectedPlate.width * 100).toInt()}%", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = selectedPlate.width,
+                onValueChange = { state.updateSelectedPlateWidth(it) },
+                valueRange = 0.02f..0.12f,
+            )
+            Text("极板方向 ${selectedPlate.rotation.toInt()}°", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = selectedPlate.rotation,
+                onValueChange = { state.updateSelectedPlateRotation(it) },
+                valueRange = -180f..180f,
+            )
+            FieldButton("电场反向") { state.updateSelectedPlateVoltage(-selectedPlate.voltage) }
             FieldButton("删除平行板") { state.removeSelected() }
         }
 
         Spacer(Modifier.height(2.dp))
         Text(
             "电场模式独立运行，不会修改电路实验。\n" +
-                "粒子运动使用库仑力积分，拖动电荷可实时改变电场。",
+                "点电荷固定不动，只有试探粒子受电场力运动。",
             color = LabColors.InkFaint,
             fontSize = 10.sp,
             lineHeight = 15.sp,

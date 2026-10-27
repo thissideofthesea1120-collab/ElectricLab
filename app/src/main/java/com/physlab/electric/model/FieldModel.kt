@@ -17,6 +17,13 @@ data class FieldCharge(
     val label: String = "",
 )
 
+enum class ParticleKind {
+    ELECTRON,
+    PROTON,
+    ALPHA,
+    CUSTOM,
+}
+
 data class FieldParticle(
     val id: Long,
     val position: Offset,
@@ -27,6 +34,10 @@ data class FieldParticle(
     val label: String = "",
     val initialPosition: Offset = position,
     val initialVelocity: Offset = velocity,
+    val kind: ParticleKind = ParticleKind.CUSTOM,
+    val chargeElementary: Float = chargeMicroC,
+    val massKg: Float = 1.67e-27f,
+    val effectiveMass: Float = mass,
 )
 
 data class UniformField(
@@ -46,6 +57,7 @@ data class ParallelPlate(
     val separation: Float,
     val length: Float,
     val voltage: Float,
+    val width: Float = 0.05f,
     val label: String = "",
 )
 
@@ -141,8 +153,8 @@ object FieldEngine {
         val safeDt = dt.coerceIn(0f, 0.03f)
         return particles.map { particle ->
             val force = forceAt(particle.position, particle.chargeMicroC, charges, uniformFields, parallelPlates)
-            var ax = force.x / particle.mass.coerceAtLeast(0.01f)
-            var ay = force.y / particle.mass.coerceAtLeast(0.01f)
+            var ax = force.x / particle.effectiveMass.coerceAtLeast(0.01f)
+            var ay = force.y / particle.effectiveMass.coerceAtLeast(0.01f)
             val accel = sqrt(ax * ax + ay * ay)
             if (accel > MAX_ACCELERATION) {
                 val scale = MAX_ACCELERATION / accel

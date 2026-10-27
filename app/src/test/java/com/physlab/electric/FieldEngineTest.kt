@@ -67,4 +67,15 @@ class FieldEngineTest {
         check(inside.y > 0f)
         check(outside.getDistance() < 0.00001f)
     }
+
+    @Test
+    fun electronAndProtonAccelerateOppositeInUniformField() {
+        val field = UniformField(1, Offset(0.5f, 0.5f), 0.8f, 0.8f, 0f, 0.5f)
+        val electron = FieldParticle(1, Offset(0.5f, 0.5f), Offset.Zero, -1f, effectiveMass = 1f)
+        val proton = FieldParticle(2, Offset(0.5f, 0.5f), Offset.Zero, 1f, effectiveMass = 4f)
+        val e = FieldEngine.stepParticles(listOf(electron), emptyList(), 0.016f, listOf(field)).single()
+        val p = FieldEngine.stepParticles(listOf(proton), emptyList(), 0.016f, listOf(field)).single()
+        check(e.position.x < 0.5f)
+        check(p.position.x > 0.5f)
+    }
 }

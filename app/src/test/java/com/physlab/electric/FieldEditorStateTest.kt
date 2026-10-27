@@ -28,4 +28,13 @@ class FieldEditorStateTest {
         check(state.selectedChargeId == null)
         check(state.selectedParticleId == null)
     }
+
+    @Test
+    fun sourceChargesStayFixedDuringSimulation() {
+        val state = FieldEditorState()
+        state.addCharge(1f)
+        val before = state.charges.map { it.position }
+        repeat(100) { state.step(0.016f) }
+        check(state.charges.map { it.position } == before)
+    }
 }
