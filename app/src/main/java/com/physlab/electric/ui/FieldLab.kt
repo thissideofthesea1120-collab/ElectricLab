@@ -4,7 +4,8 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -554,31 +555,59 @@ private fun FieldCanvas(state: FieldEditorState, modifier: Modifier = Modifier) 
             .background(Color(0xFF080D13))
             .onSizeChanged { boardSize = it }
             .pointerInput(Unit) {
-                detectTransformGestures { centroid, pan, zoom, _ ->
-                    if (boardSize.width <= 0 || boardSize.height <= 0) return@detectTransformGestures
+                awaitEachGesture {
+                    if (boardSize.width <= 0 || boardSize.height <= 0) return@awaitEachGesture
                     val width = boardSize.width.toFloat()
                     val height = boardSize.height.toFloat()
                     val center = Offset(width / 2f, height / 2f)
-                    if (zoom != 1f) {
-                        state.viewZoom = (state.viewZoom * zoom).coerceIn(0.7f, 3f)
-                        state.viewPan += pan
-                    } else {
-                        val toNorm = Offset(
-                            ((centroid.x - center.x - state.viewPan.x) / state.viewZoom + center.x) / width,
-                            ((centroid.y - center.y - state.viewPan.y) / state.viewZoom + center.y) / height,
-                        )
-                        // 每次单指拖动都重新命中，保证任意电荷/粒子都能拖动。
-                        state.selectAt(toNorm)
-                        if (state.selectedChargeId != null || state.selectedParticleId != null) {
-                            state.dragSelected(
-                                Offset(
-                                    pan.x / (width * state.viewZoom),
-                                    pan.y / (height * state.viewZoom),
-                                ),
-                            )
-                        } else {
-                            state.viewPan += pan
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    var last = first.position
+                    var previousTwo: Pair<Offset, Offset>? = null
+                    var multiTouch = false
+                    fun toNorm(point: Offset): Offset = Offset(
+                        ((point.x - center.x - state.viewPan.x) / state.viewZoom + center.x) / width,
+                        ((point.y - center.y - state.viewPan.y) / state.viewZoom + center.y) / height,
+                    )
+                    state.selectAt(toNorm(first.position))
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.size >= 2) {
+                            multiTouch = true
+                            val a = pressed[0].position
+                            val b = pressed[1].position
+                            previousTwo?.let { previous ->
+                                val oldDistance = (previous.first - previous.second).getDistance()
+                                val newDistance = (a - b).getDistance()
+                                if (oldDistance > 1f) {
+                                    state.viewZoom = (state.viewZoom * (newDistance / oldDistance)).coerceIn(0.7f, 3f)
+                                }
+                                state.viewPan += (a + b) / 2f - (previous.first + previous.second) / 2f
+                            }
+                            previousTwo = a to b
+                        } else if (!multiTouch && pressed.size == 1) {
+                            val position = pressed[0].position
+                            val delta = position - last
+                            last = position
+                            state.selectAt(toNorm(position))
+                            if (state.selectedChargeId != null ||
+                                state.selectedParticleId != null ||
+                                state.selectedParticleSourceId != null ||
+                                state.selectedUniformFieldId != null ||
+                                state.selectedParallelPlateId != null
+                            ) {
+                                state.dragSelected(
+                                    Offset(
+                                        delta.x / (width * state.viewZoom),
+                                        delta.y / (height * state.viewZoom),
+                                    ),
+                                )
+                            } else {
+                                state.viewPan += delta
+                            }
                         }
+                        event.changes.forEach { it.consume() }
+                        if (event.changes.none { it.pressed }) break
                     }
                 }
             },
