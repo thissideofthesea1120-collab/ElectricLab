@@ -5,6 +5,7 @@ import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Slider
@@ -35,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -45,6 +48,8 @@ import androidx.compose.ui.unit.sp
 import com.physlab.electric.model.FieldCharge
 import com.physlab.electric.model.FieldEngine
 import com.physlab.electric.model.FieldParticle
+import com.physlab.electric.model.ParallelPlate
+import com.physlab.electric.model.UniformField
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -67,14 +72,20 @@ class FieldEditorState {
                 velocity = Offset(0.12f, 0f),
                 chargeMicroC = 1f,
                 label = "P1",
+                initialPosition = Offset(0.50f, 0.22f),
+                initialVelocity = Offset(0.12f, 0f),
             ),
         ),
     )
+    var uniformFields by mutableStateOf<List<UniformField>>(emptyList())
+    var parallelPlates by mutableStateOf<List<ParallelPlate>>(emptyList())
     var running by mutableStateOf(false)
     var showFieldLines by mutableStateOf(true)
     var showForces by mutableStateOf(true)
     var selectedChargeId by mutableStateOf<Long?>(null)
     var selectedParticleId by mutableStateOf<Long?>(null)
+    var selectedUniformFieldId by mutableStateOf<Long?>(null)
+    var selectedParallelPlateId by mutableStateOf<Long?>(null)
     var viewZoom by mutableStateOf(1.8f)
     var viewPan by mutableStateOf(Offset.Zero)
     private var nextId = 10L
@@ -90,6 +101,42 @@ class FieldEditorState {
         charges = charges + charge
         selectedChargeId = charge.id
         selectedParticleId = null
+        selectedUniformFieldId = null
+        selectedParallelPlateId = null
+    }
+
+    fun addUniformField() {
+        val field = UniformField(
+            id = nextId++,
+            center = Offset(0.50f, 0.52f),
+            width = 0.42f,
+            height = 0.28f,
+            directionDegrees = 0f,
+            strength = 0.22f,
+            label = "E${uniformFields.size + 1}",
+        )
+        uniformFields = uniformFields + field
+        selectedUniformFieldId = field.id
+        selectedParallelPlateId = null
+        selectedChargeId = null
+        selectedParticleId = null
+    }
+
+    fun addParallelPlate() {
+        val plate = ParallelPlate(
+            id = nextId++,
+            center = Offset(0.50f, 0.52f),
+            rotation = 0f,
+            separation = 0.18f,
+            length = 0.46f,
+            voltage = 12f,
+            label = "板${parallelPlates.size + 1}",
+        )
+        parallelPlates = parallelPlates + plate
+        selectedParallelPlateId = plate.id
+        selectedUniformFieldId = null
+        selectedChargeId = null
+        selectedParticleId = null
     }
 
     fun addParticle(sign: Float) {
@@ -99,10 +146,14 @@ class FieldEditorState {
             velocity = Offset(0.15f, 0f),
             chargeMicroC = sign,
             label = "P${particles.size + 1}",
+            initialPosition = Offset(0.50f, 0.20f),
+            initialVelocity = Offset(0.15f, 0f),
         )
         particles = particles + particle
         selectedParticleId = particle.id
         selectedChargeId = null
+        selectedUniformFieldId = null
+        selectedParallelPlateId = null
         initialParticles = particles
     }
 
@@ -121,6 +172,8 @@ class FieldEditorState {
         }
         selectedChargeId = null
         selectedParticleId = null
+        selectedUniformFieldId = null
+        selectedParallelPlateId = null
     }
 
     fun dragSelected(delta: Offset) {
@@ -142,27 +195,72 @@ class FieldEditorState {
         charges = charges.map { if (it.id == id) it.copy(chargeMicroC = FieldEngine.clampCharge(value)) else it }
     }
 
+    fun updateSelectedParticleVelocity(speed: Float, angleDegrees: Float) {
+        val id = selectedParticleId ?: return
+        val angle = Math.toRadians(angleDegrees.toDouble())
+        val velocity = Offset(
+            (cos(angle) * speed).toFloat(),
+            (sin(angle) * speed).toFloat(),
+        )
+        particles = particles.map { if (it.id == id) it.copy(velocity = velocity, initialVelocity = velocity) else it }
+        initialParticles = initialParticles.map {
+            if (it.id == id) it.copy(velocity = velocity, initialVelocity = velocity) else it
+        }
+    }
+
+    fun updateSelectedPlateVoltage(value: Float) {
+        val id = selectedParallelPlateId ?: return
+        parallelPlates = parallelPlates.map { if (it.id == id) it.copy(voltage = value.coerceIn(-30f, 30f)) else it }
+    }
+
+    fun updateSelectedPlateSeparation(value: Float) {
+        val id = selectedParallelPlateId ?: return
+        parallelPlates = parallelPlates.map {
+            if (it.id == id) it.copy(separation = value.coerceIn(0.06f, 0.35f)) else it
+        }
+    }
+
+    fun updateSelectedUniformStrength(value: Float) {
+        val id = selectedUniformFieldId ?: return
+        uniformFields = uniformFields.map { if (it.id == id) it.copy(strength = value.coerceIn(0f, 0.6f)) else it }
+    }
+
+    fun updateSelectedUniformDirection(value: Float) {
+        val id = selectedUniformFieldId ?: return
+        uniformFields = uniformFields.map { if (it.id == id) it.copy(directionDegrees = value) else it }
+    }
+
     fun removeSelected() {
         selectedChargeId?.let { id -> charges = charges.filterNot { it.id == id } }
         selectedParticleId?.let { id -> particles = particles.filterNot { it.id == id } }
+        selectedUniformFieldId?.let { id -> uniformFields = uniformFields.filterNot { it.id == id } }
+        selectedParallelPlateId?.let { id -> parallelPlates = parallelPlates.filterNot { it.id == id } }
         selectedChargeId = null
         selectedParticleId = null
+        selectedUniformFieldId = null
+        selectedParallelPlateId = null
     }
 
     fun resetParticles() {
-        particles = initialParticles.map { it.copy(position = it.position, velocity = it.velocity, trail = emptyList()) }
+        particles = initialParticles.map {
+            it.copy(position = it.initialPosition, velocity = it.initialVelocity, trail = emptyList())
+        }
     }
 
     fun clearAll() {
         charges = emptyList()
         particles = emptyList()
+        uniformFields = emptyList()
+        parallelPlates = emptyList()
         selectedChargeId = null
         selectedParticleId = null
+        selectedUniformFieldId = null
+        selectedParallelPlateId = null
         running = false
     }
 
     fun step(dt: Float) {
-        particles = FieldEngine.stepParticles(particles, charges, dt)
+        particles = FieldEngine.stepParticles(particles, charges, dt, uniformFields, parallelPlates)
     }
 
     fun resetView() {
@@ -276,7 +374,11 @@ private fun FieldCanvas(state: FieldEditorState, modifier: Modifier = Modifier) 
             scale(state.viewZoom, state.viewZoom, pivot = center)
         }) {
             drawFieldGrid()
-            if (state.showFieldLines) drawFieldLines(state.charges)
+            drawUniformFields(state.uniformFields)
+            drawParallelPlates(state.parallelPlates)
+            if (state.showFieldLines) {
+                drawFieldLines(state.charges, state.uniformFields, state.parallelPlates)
+            }
             if (state.showForces) drawForceArrows(state.charges)
             state.charges.forEach { charge ->
                 val p = charge.position.toCanvas(size)
@@ -342,7 +444,75 @@ private fun DrawScope.drawFieldGrid() {
     drawRect(Color(0xFF0B1520), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
 }
 
-private fun DrawScope.drawFieldLines(charges: List<FieldCharge>) {
+private fun DrawScope.drawUniformFields(fields: List<UniformField>) {
+    for (field in fields) {
+        val center = field.center.toCanvas(size)
+        val width = field.width * size.width
+        val height = field.height * size.height
+        drawRect(
+            Color(0xFF4FB3D9).copy(alpha = 0.06f),
+            topLeft = Offset(center.x - width / 2f, center.y - height / 2f),
+            size = androidx.compose.ui.geometry.Size(width, height),
+        )
+        drawRect(
+            Color(0xFF6BCBE0).copy(alpha = 0.42f),
+            topLeft = Offset(center.x - width / 2f, center.y - height / 2f),
+            size = androidx.compose.ui.geometry.Size(width, height),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(1.2f),
+        )
+        val angle = Math.toRadians(field.directionDegrees.toDouble())
+        val unit = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+        for (row in 0..2) {
+            for (col in 0..3) {
+                val x = center.x - width * 0.35f + width * 0.7f * col / 3f
+                val y = center.y - height * 0.3f + height * 0.6f * row / 2f
+                val start = Offset(x, y) - unit * 14f
+                val end = Offset(x, y) + unit * 14f
+                drawLine(Color(0xFF7CE4F2).copy(alpha = 0.72f), start, end, 1.4f)
+                drawFieldLineArrow(end, unit, Color(0xFF7CE4F2).copy(alpha = 0.72f))
+            }
+        }
+        drawFieldText(
+            "E ${String.format(java.util.Locale.US, "%.2f", field.strength)}",
+            center + Offset(0f, height / 2f + 16f),
+            Color(0xFF9BEAF3),
+        )
+    }
+}
+
+private fun DrawScope.drawParallelPlates(plates: List<ParallelPlate>) {
+    for (plate in plates) {
+        val center = plate.center.toCanvas(size)
+        val length = plate.length * size.width
+        val separation = plate.separation * size.height
+        withTransform({ rotate(plate.rotation, pivot = center) }) {
+            val top = center.y - separation / 2f
+            val bottom = center.y + separation / 2f
+            drawLine(Color(0xFFFF6B72), Offset(center.x - length / 2f, top), Offset(center.x + length / 2f, top), 4f)
+            drawLine(Color(0xFF5AB6FF), Offset(center.x - length / 2f, bottom), Offset(center.x + length / 2f, bottom), 4f)
+            for (i in 1..4) {
+                val x = center.x - length / 2f + length * i / 5f
+                drawLine(
+                    Color(0xFF7CE4F2).copy(alpha = 0.55f),
+                    Offset(x, top + 5f),
+                    Offset(x, bottom - 5f),
+                    1.2f,
+                )
+            }
+        }
+        drawFieldText(
+            "${plate.label}  ${String.format(java.util.Locale.US, "%.1f", plate.voltage)} V",
+            center + Offset(0f, separation / 2f + 18f),
+            Color(0xFFDCE9F6),
+        )
+    }
+}
+
+private fun DrawScope.drawFieldLines(
+    charges: List<FieldCharge>,
+    uniformFields: List<UniformField> = emptyList(),
+    parallelPlates: List<ParallelPlate> = emptyList(),
+) {
     if (charges.isEmpty()) return
     val positive = charges.filter { it.chargeMicroC > 0f }
     val negative = charges.filter { it.chargeMicroC < 0f }
@@ -352,7 +522,7 @@ private fun DrawScope.drawFieldLines(charges: List<FieldCharge>) {
         for (i in 0 until 8) {
             val angle = (Math.PI * 2.0 * i / 8.0).toFloat()
             val seed = charge.position + Offset(cos(angle), sin(angle)) * 0.035f
-            val points = FieldEngine.fieldLine(seed, direction, charges, 80)
+            val points = FieldEngine.fieldLine(seed, direction, charges, uniformFields, parallelPlates, 80)
             if (points.size < 2) continue
             val path = Path()
             points.forEachIndexed { index, point ->
@@ -363,7 +533,7 @@ private fun DrawScope.drawFieldLines(charges: List<FieldCharge>) {
             var arrowIndex = 10
             while (arrowIndex < points.size - 1) {
                 val p = points[arrowIndex]
-                val field = FieldEngine.electricFieldAt(p, charges)
+                val field = FieldEngine.electricFieldAt(p, charges, uniformFields, parallelPlates)
                 val fieldLength = field.getDistance()
                 if (fieldLength > 0.00001f) {
                     drawFieldLineArrow(
@@ -421,7 +591,10 @@ private fun Float.format1(): String = String.format(java.util.Locale.US, "%.1f",
 @Composable
 private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
     Column(
-        modifier.background(LabColors.SurfaceRaised).padding(14.dp),
+        modifier
+            .background(LabColors.SurfaceRaised)
+            .verticalScroll(rememberScrollState())
+            .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("添加电荷", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
@@ -433,6 +606,11 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldButton("+ 试探粒子") { state.addParticle(1f) }
             FieldButton("− 试探粒子") { state.addParticle(-1f) }
+        }
+        Text("添加场", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldButton("+ 匀强电场") { state.addUniformField() }
+            FieldButton("+ 平行板") { state.addParallelPlate() }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldButton(if (state.showFieldLines) "隐藏电场线" else "显示电场线", primary = state.showFieldLines) {
@@ -468,7 +646,68 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
                 fontSize = 11.sp,
             )
             FieldButton("删除粒子") { state.removeSelected() }
+            val speed = selectedParticle.velocity.getDistance()
+            val angle = Math.toDegrees(
+                atan2(selectedParticle.velocity.y.toDouble(), selectedParticle.velocity.x.toDouble()),
+            ).toFloat()
+            Text("初速度 ${String.format(java.util.Locale.US, "%.2f", speed)}", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = speed,
+                onValueChange = { state.updateSelectedParticleVelocity(it, angle) },
+                valueRange = 0f..0.8f,
+            )
+            Text("初速度方向 ${angle.toInt()}°", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = angle,
+                onValueChange = { state.updateSelectedParticleVelocity(speed, it) },
+                valueRange = 0f..360f,
+            )
         }
+
+        val selectedUniform = state.uniformFields.firstOrNull { it.id == state.selectedUniformFieldId }
+        if (selectedUniform != null) {
+            Text("${selectedUniform.label} 匀强电场", color = LabColors.InkMuted, fontSize = 11.sp)
+            Text("场强 ${String.format(java.util.Locale.US, "%.2f", selectedUniform.strength)}", color = Color(0xFF9BEAF3), fontSize = 10.sp)
+            Slider(
+                value = selectedUniform.strength,
+                onValueChange = { state.updateSelectedUniformStrength(it) },
+                valueRange = 0f..0.6f,
+            )
+            Text("方向 ${selectedUniform.directionDegrees.toInt()}°", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = selectedUniform.directionDegrees,
+                onValueChange = { state.updateSelectedUniformDirection(it) },
+                valueRange = 0f..360f,
+            )
+            FieldButton("删除匀强电场") { state.removeSelected() }
+        }
+
+        val selectedPlate = state.parallelPlates.firstOrNull { it.id == state.selectedParallelPlateId }
+        if (selectedPlate != null) {
+            Text("${selectedPlate.label} 平行板", color = LabColors.InkMuted, fontSize = 11.sp)
+            Text(
+                "电压 ${String.format(java.util.Locale.US, "%.1f", selectedPlate.voltage)} V",
+                color = Color(0xFFDCE9F6),
+                fontSize = 10.sp,
+            )
+            Slider(
+                value = selectedPlate.voltage,
+                onValueChange = { state.updateSelectedPlateVoltage(it) },
+                valueRange = -30f..30f,
+            )
+            Text(
+                "板间距 ${String.format(java.util.Locale.US, "%.2f", selectedPlate.separation)}",
+                color = LabColors.InkMuted,
+                fontSize = 10.sp,
+            )
+            Slider(
+                value = selectedPlate.separation,
+                onValueChange = { state.updateSelectedPlateSeparation(it) },
+                valueRange = 0.06f..0.35f,
+            )
+            FieldButton("删除平行板") { state.removeSelected() }
+        }
+
         Spacer(Modifier.height(2.dp))
         Text(
             "电场模式独立运行，不会修改电路实验。\n" +

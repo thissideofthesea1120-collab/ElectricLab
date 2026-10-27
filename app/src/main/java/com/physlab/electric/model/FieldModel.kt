@@ -2,6 +2,8 @@ package com.physlab.electric.model
 
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -23,11 +25,35 @@ data class FieldParticle(
     val mass: Float = 1f,
     val trail: List<Offset> = emptyList(),
     val label: String = "",
+    val initialPosition: Offset = position,
+    val initialVelocity: Offset = velocity,
+)
+
+data class UniformField(
+    val id: Long,
+    val center: Offset,
+    val width: Float,
+    val height: Float,
+    val directionDegrees: Float,
+    val strength: Float,
+    val label: String = "",
+)
+
+data class ParallelPlate(
+    val id: Long,
+    val center: Offset,
+    val rotation: Float,
+    val separation: Float,
+    val length: Float,
+    val voltage: Float,
+    val label: String = "",
 )
 
 data class FieldScene(
     val charges: List<FieldCharge> = emptyList(),
     val particles: List<FieldParticle> = emptyList(),
+    val uniformFields: List<UniformField> = emptyList(),
+    val parallelPlates: List<ParallelPlate> = emptyList(),
 )
 
 object FieldEngine {
@@ -37,7 +63,12 @@ object FieldEngine {
     private const val MAX_ACCELERATION = 24f
     private const val MAX_SPEED = 1.5f
 
-    fun electricFieldAt(point: Offset, charges: List<FieldCharge>): Offset {
+    fun electricFieldAt(
+        point: Offset,
+        charges: List<FieldCharge>,
+        uniformFields: List<UniformField> = emptyList(),
+        parallelPlates: List<ParallelPlate> = emptyList(),
+    ): Offset {
         var ex = 0f
         var ey = 0f
         for (charge in charges) {
@@ -49,11 +80,36 @@ object FieldEngine {
             ex += dx * factor
             ey += dy * factor
         }
+        for (field in uniformFields) {
+            val dx = point.x - field.center.x
+            val dy = point.y - field.center.y
+            if (abs(dx) <= field.width / 2f && abs(dy) <= field.height / 2f) {
+                val angle = Math.toRadians(field.directionDegrees.toDouble())
+                ex += cos(angle).toFloat() * field.strength
+                ey += sin(angle).toFloat() * field.strength
+            }
+        }
+        for (plate in parallelPlates) {
+            val local = rotate(point - plate.center, -plate.rotation)
+            if (abs(local.x) <= plate.length / 2f && abs(local.y) <= plate.separation / 2f) {
+                val strength = (plate.voltage / plate.separation.coerceAtLeast(0.01f)) * 0.0025f
+                val localField = Offset(0f, strength)
+                val world = rotate(localField, plate.rotation)
+                ex += world.x
+                ey += world.y
+            }
+        }
         return Offset(ex, ey)
     }
 
-    fun forceAt(point: Offset, chargeMicroC: Float, charges: List<FieldCharge>): Offset {
-        val field = electricFieldAt(point, charges)
+    fun forceAt(
+        point: Offset,
+        chargeMicroC: Float,
+        charges: List<FieldCharge>,
+        uniformFields: List<UniformField> = emptyList(),
+        parallelPlates: List<ParallelPlate> = emptyList(),
+    ): Offset {
+        val field = electricFieldAt(point, charges, uniformFields, parallelPlates)
         return Offset(field.x * chargeMicroC, field.y * chargeMicroC)
     }
 
@@ -66,15 +122,25 @@ object FieldEngine {
         return Offset(dx * factor, dy * factor)
     }
 
+    private fun rotate(value: Offset, degrees: Float): Offset {
+        if (degrees == 0f) return value
+        val radians = Math.toRadians(degrees.toDouble())
+        val c = cos(radians).toFloat()
+        val s = sin(radians).toFloat()
+        return Offset(value.x * c - value.y * s, value.x * s + value.y * c)
+    }
+
     fun stepParticles(
         particles: List<FieldParticle>,
         charges: List<FieldCharge>,
         dt: Float,
+        uniformFields: List<UniformField> = emptyList(),
+        parallelPlates: List<ParallelPlate> = emptyList(),
     ): List<FieldParticle> {
         if (particles.isEmpty()) return particles
         val safeDt = dt.coerceIn(0f, 0.03f)
         return particles.map { particle ->
-            val force = forceAt(particle.position, particle.chargeMicroC, charges)
+            val force = forceAt(particle.position, particle.chargeMicroC, charges, uniformFields, parallelPlates)
             var ax = force.x / particle.mass.coerceAtLeast(0.01f)
             var ay = force.y / particle.mass.coerceAtLeast(0.01f)
             val accel = sqrt(ax * ax + ay * ay)
@@ -119,11 +185,18 @@ object FieldEngine {
         return Offset(fx, fy)
     }
 
-    fun fieldLine(start: Offset, direction: Float, charges: List<FieldCharge>, steps: Int = 90): List<Offset> {
+    fun fieldLine(
+        start: Offset,
+        direction: Float,
+        charges: List<FieldCharge>,
+        uniformFields: List<UniformField> = emptyList(),
+        parallelPlates: List<ParallelPlate> = emptyList(),
+        steps: Int = 90,
+    ): List<Offset> {
         val points = mutableListOf(start)
         var point = start
         repeat(steps) {
-            val field = electricFieldAt(point, charges)
+            val field = electricFieldAt(point, charges, uniformFields, parallelPlates)
             val length = field.getDistance()
             if (length < 0.00001f) return@repeat
             point = point + Offset(field.x / length, field.y / length) * (0.012f * direction)

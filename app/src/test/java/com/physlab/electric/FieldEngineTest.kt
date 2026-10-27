@@ -4,6 +4,8 @@ import androidx.compose.ui.geometry.Offset
 import com.physlab.electric.model.FieldCharge
 import com.physlab.electric.model.FieldEngine
 import com.physlab.electric.model.FieldParticle
+import com.physlab.electric.model.ParallelPlate
+import com.physlab.electric.model.UniformField
 import org.junit.Test
 
 class FieldEngineTest {
@@ -46,5 +48,23 @@ class FieldEngineTest {
         val stepped = FieldEngine.stepParticles(listOf(particle), listOf(charge), 0.016f).single()
         check(stepped.position.x > particle.position.x)
         check(stepped.trail.isNotEmpty())
+    }
+
+    @Test
+    fun uniformFieldOnlyInsideRect() {
+        val field = UniformField(1, Offset(0.5f, 0.5f), 0.4f, 0.3f, 0f, 0.2f)
+        val inside = FieldEngine.electricFieldAt(Offset(0.5f, 0.5f), emptyList(), listOf(field))
+        val outside = FieldEngine.electricFieldAt(Offset(0.9f, 0.5f), emptyList(), listOf(field))
+        check(inside.x > 0f)
+        check(outside.getDistance() < 0.00001f)
+    }
+
+    @Test
+    fun parallelPlateFieldInsideOnly() {
+        val plate = ParallelPlate(1, Offset(0.5f, 0.5f), 0f, 0.2f, 0.4f, 12f)
+        val inside = FieldEngine.electricFieldAt(Offset(0.5f, 0.5f), emptyList(), emptyList(), listOf(plate))
+        val outside = FieldEngine.electricFieldAt(Offset(0.9f, 0.5f), emptyList(), emptyList(), listOf(plate))
+        check(inside.y > 0f)
+        check(outside.getDistance() < 0.00001f)
     }
 }
