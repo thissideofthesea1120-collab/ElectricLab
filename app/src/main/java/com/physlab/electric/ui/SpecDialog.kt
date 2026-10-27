@@ -83,9 +83,6 @@ fun InstrumentSpecDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (component.type.isRotatable) {
-                    RotationEditor(editor, component)
-                }
                 when (component.type) {
                     InstrumentType.BATTERY -> {
                         if (component.specLocked) {
@@ -411,6 +408,18 @@ fun InstrumentSpecDialog(
                             fontSize = 10.sp,
                             lineHeight = 15.sp,
                         )
+                    }
+                }
+                if (component.type.isRotatable) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (angle in listOf(0f, 45f, 90f, 180f)) {
+                            OptionChip(
+                                "${angle.toInt()}°",
+                                kotlin.math.abs(component.rotation - angle) < 0.5f,
+                            ) {
+                                editor.setRotation(component.id, angle)
+                            }
+                        }
                     }
                 }
             }
@@ -813,42 +822,6 @@ private fun InternalResistanceEditor(editor: LabEditorState, component: PlacedIn
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
     }
-}
-
-@Composable
-private fun RotationEditor(editor: LabEditorState, component: PlacedInstrument) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("旋转角度", color = LabColors.InkMuted, fontSize = 10.sp)
-        Spacer(Modifier.weight(1f))
-        Text(
-            "${component.rotation.toInt()}°",
-            color = LabColors.Primary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-    Slider(
-        value = component.rotation,
-        onValueChange = { editor.updateRotationLive(component.id, it) },
-        valueRange = 0f..360f,
-        colors = SliderDefaults.colors(
-            thumbColor = LabColors.Primary,
-            activeTrackColor = LabColors.Primary,
-            inactiveTrackColor = LabColors.SurfaceHigh,
-        ),
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (angle in listOf(0f, 45f, 90f, 180f)) {
-            OptionChip("${angle.toInt()}°", kotlin.math.abs(component.rotation - angle) < 0.5f) {
-                editor.setRotation(component.id, angle)
-            }
-        }
-    }
-    Text(
-        "也可以拖动仪器上方的绿色旋转手柄。",
-        color = LabColors.InkFaint,
-        fontSize = 9.sp,
-    )
 }
 
 @Composable
