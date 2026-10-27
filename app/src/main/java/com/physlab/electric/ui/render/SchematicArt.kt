@@ -471,6 +471,31 @@ private fun DrawScope.drawSchematicSymbol(
                 drawLine(Color(0xFFFF6B72), Offset(12f, -8f), Offset(18f, -13f), 1.1f, StrokeCap.Round)
             }
 
+            InstrumentType.DIODE -> {
+                val diode = Path().apply {
+                    moveTo(-10f, -9f)
+                    lineTo(-10f, 9f)
+                    lineTo(7f, 0f)
+                    close()
+                }
+                drawPath(diode, Color(0xFF10151D))
+                drawPath(diode, line, style = Stroke(1.6f))
+                drawLine(line, Offset(7f, -9f), Offset(7f, 9f), 2.3f, StrokeCap.Round)
+            }
+
+            InstrumentType.THERMISTOR -> {
+                drawRect(Color(0xFF10151D), Offset(-14f, -7f), Size(28f, 14f))
+                drawRect(line, Offset(-14f, -7f), Size(28f, 14f), style = Stroke(1.7f))
+                textLabel("θ", 0f, 4f, 10f, line, true)
+            }
+
+            InstrumentType.PHOTORESISTOR -> {
+                drawRect(Color(0xFF10151D), Offset(-14f, -7f), Size(28f, 14f))
+                drawRect(line, Offset(-14f, -7f), Size(28f, 14f), style = Stroke(1.7f))
+                drawLine(Color(0xFFFFE08A), Offset(-8f, -15f), Offset(-3f, -9f), 1.3f)
+                drawLine(Color(0xFFFFE08A), Offset(2f, -15f), Offset(7f, -9f), 1.3f)
+            }
+
             InstrumentType.RESISTANCE_BOX -> {
                 drawRect(Color(0xFF10151D), Offset(-16f, -9f), Size(32f, 18f))
                 drawRect(line, Offset(-16f, -9f), Size(32f, 18f), style = Stroke(1.7f))

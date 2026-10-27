@@ -1,6 +1,7 @@
 package com.physlab.electric.model
 
 import androidx.compose.ui.geometry.Offset
+import kotlin.math.pow
 import androidx.compose.ui.graphics.Color
 
 enum class InstrumentCategory(val title: String, val subtitle: String, val shortTitle: String) {
@@ -174,18 +175,18 @@ enum class InstrumentType(
         listOf("+", "−"), "LED",
     ),
     DIODE(
-        "diode", "普通二极管", InstrumentCategory.LOAD, 84f, 72f,
-        listOf(Offset(-27f, 32f), Offset(27f, 32f)),
+        "diode", "普通二极管", InstrumentCategory.LOAD, 100f, 46f,
+        listOf(Offset(-50f, 0f), Offset(50f, 0f)),
         listOf("+", "−"), "D",
     ),
     THERMISTOR(
-        "thermistor", "热敏电阻", InstrumentCategory.LOAD, 84f, 72f,
-        listOf(Offset(-27f, 32f), Offset(27f, 32f)),
+        "thermistor", "热敏电阻", InstrumentCategory.LOAD, 110f, 44f,
+        listOf(Offset(-55f, 0f), Offset(55f, 0f)),
         listOf("1", "2"), "Rt",
     ),
     PHOTORESISTOR(
-        "photoresistor", "光敏电阻", InstrumentCategory.LOAD, 84f, 72f,
-        listOf(Offset(-27f, 32f), Offset(27f, 32f)),
+        "photoresistor", "光敏电阻", InstrumentCategory.LOAD, 110f, 48f,
+        listOf(Offset(-55f, 0f), Offset(55f, 0f)),
         listOf("1", "2"), "Rg",
     ),
     AMMETER(
@@ -319,6 +320,8 @@ data class PlacedInstrument(
     val lampSpec: LampSpec = LampSpec.V2_5_0_3,
     val resistance: Float = 10f,
     val resistanceHidden: Boolean = false,
+    val lightPercent: Float = 50f,
+    val temperatureC: Float = 25f,
     val slider: Float = 0.5f,
     val rheostatMax: Float = 20f,
     val supplyVoltage: Float = 12f,
@@ -354,6 +357,27 @@ data class PlacedInstrument(
         }
 
     val rheostatResistance: Float get() = slider.coerceIn(0f, 1f) * rheostatMax
+
+    /** 光敏电阻：光照越强，阻值越小。 */
+    val photoresistorResistance: Float
+        get() {
+            val light = lightPercent.coerceIn(0f, 100f) / 100f
+            return (500f + 999_500f * (1f - light).pow(4f)).coerceIn(500f, 1_000_000f)
+        }
+
+    /** NTC 热敏电阻：温度越高，阻值越小。 */
+    val thermistorResistance: Float
+        get() {
+            val delta = (temperatureC.coerceIn(-20f, 120f) - 25f) / 25f
+            return (10_000f * 2f.pow(-delta)).coerceIn(50f, 100_000f)
+        }
+
+    val sensorResistance: Float
+        get() = when (type) {
+            InstrumentType.PHOTORESISTOR -> photoresistorResistance
+            InstrumentType.THERMISTOR -> thermistorResistance
+            else -> resistance
+        }
 
     val multimeterRangeValue: MultimeterRange get() = multimeterRange()
 
@@ -683,6 +707,8 @@ private fun measureEquivalentResistance(
             InstrumentType.MOTOR -> 12f
             InstrumentType.BUZZER -> 30f
             InstrumentType.LED -> 180f
+            InstrumentType.DIODE -> 30f
+            InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> component.sensorResistance.coerceAtLeast(1f)
             InstrumentType.ELECTROMAGNET -> 6f
             InstrumentType.SOLENOID -> 5f
             else -> 0f
@@ -741,6 +767,9 @@ private fun sourceConnectedToProbes(
             InstrumentType.MOTOR,
             InstrumentType.BUZZER,
             InstrumentType.LED,
+            InstrumentType.DIODE,
+            InstrumentType.THERMISTOR,
+            InstrumentType.PHOTORESISTOR,
             InstrumentType.ELECTROMAGNET,
             InstrumentType.SOLENOID,
             -> true
@@ -1192,7 +1221,7 @@ private fun simulateCircuitOnce(
             component.type == InstrumentType.DIODE -> addBranch(component.id, t0, t1, 30f)
             component.type == InstrumentType.THERMISTOR ||
                 component.type == InstrumentType.PHOTORESISTOR ->
-                addBranch(component.id, t0, t1, component.resistance.coerceAtLeast(1f))
+                addBranch(component.id, t0, t1, component.sensorResistance.coerceAtLeast(1f))
             component.type == InstrumentType.ELECTROMAGNET -> addBranch(component.id, t0, t1, 6f)
             component.type == InstrumentType.SOLENOID -> addBranch(component.id, t0, t1, 5f)
             component.type == InstrumentType.RESISTANCE_BOX ->
@@ -1383,6 +1412,8 @@ private fun simulateCircuitOnce(
             InstrumentType.MOTOR -> 12f
             InstrumentType.BUZZER -> 30f
             InstrumentType.LED -> 180f
+            InstrumentType.DIODE -> 30f
+            InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> component.sensorResistance.coerceAtLeast(1f)
             InstrumentType.ELECTROMAGNET -> 6f
             InstrumentType.SOLENOID -> 5f
             InstrumentType.RHEOSTAT -> component.rheostatMax

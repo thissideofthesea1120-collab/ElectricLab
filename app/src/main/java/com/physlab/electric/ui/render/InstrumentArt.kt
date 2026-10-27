@@ -87,7 +87,9 @@ fun DrawScope.drawInstrument(
             InstrumentType.MOTOR -> drawMotor(visual)
             InstrumentType.BUZZER -> drawBuzzer(visual)
             InstrumentType.LED -> drawLed(visual)
-            InstrumentType.DIODE, InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> drawResistor()
+            InstrumentType.DIODE -> drawDiode()
+            InstrumentType.THERMISTOR -> drawThermistor()
+            InstrumentType.PHOTORESISTOR -> drawPhotoresistor()
             InstrumentType.AMMETER -> drawMeter(visual, isAmmeter = true)
             InstrumentType.VOLTMETER -> drawMeter(visual, isAmmeter = false)
             InstrumentType.MILLIAMMETER -> drawMeter(visual, isAmmeter = true)
@@ -1552,6 +1554,89 @@ private fun DrawScope.drawRheostat(visual: InstrumentVisual) {
 // ---------------------------------------------------------------------------
 // Fixed resistor
 // ---------------------------------------------------------------------------
+
+private fun DrawScope.drawDiode() {
+    softShadow(0f, 18f, 42f, 5f, 0.45f)
+    drawLine(Color(0xFF151A21), Offset(-50f, 0f), Offset(50f, 0f), 3.2f, StrokeCap.Round)
+    drawLine(MetalLight, Offset(-50f, -0.8f), Offset(50f, -0.8f), 1.1f, StrokeCap.Round)
+    bindingPost(-50f, 0f)
+    bindingPost(50f, 0f)
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(Color(0xFF3A414C), Color(0xFF151A21), Color(0xFF05080C)),
+            startY = -12f,
+            endY = 12f,
+        ),
+        topLeft = Offset(-30f, -12f),
+        size = Size(60f, 24f),
+        cornerRadius = CornerRadius(7f, 7f),
+    )
+    drawRoundRect(
+        color = Color(0xFFC9D2DE).copy(alpha = 0.7f),
+        topLeft = Offset(15f, -12f),
+        size = Size(6f, 24f),
+        cornerRadius = CornerRadius(2f, 2f),
+    )
+    val triangle = Path().apply {
+        moveTo(-11f, -10f)
+        lineTo(11f, 0f)
+        lineTo(-11f, 10f)
+        close()
+    }
+    drawPath(triangle, Color(0xFFE8EEF7))
+    drawLine(Color(0xFFE8EEF7), Offset(11f, -11f), Offset(11f, 11f), 2.5f)
+    textLabel("+", -40f, -7f, 10f, Color(0xFFFF9CA1), true)
+    textLabel("−", 40f, -7f, 10f, Color(0xFF9CD6FF), true)
+}
+
+private fun DrawScope.drawThermistor() {
+    softShadow(0f, 18f, 46f, 5f, 0.45f)
+    drawLine(Color(0xFF151A21), Offset(-55f, 0f), Offset(55f, 0f), 3.2f, StrokeCap.Round)
+    bindingPost(-55f, 0f)
+    bindingPost(55f, 0f)
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(Color(0xFFFFF4D8), Color(0xFFE6D1A8), Color(0xFFC7A96F)),
+            startY = -13f,
+            endY = 13f,
+        ),
+        topLeft = Offset(-38f, -13f),
+        size = Size(76f, 26f),
+        cornerRadius = CornerRadius(11f, 11f),
+    )
+    textLabel("θ", 0f, 5f, 15f, Color(0xFF5A3F1E), true)
+    textLabel("NTC", 0f, -8f, 7f, Color(0xFF7B5B2E), true)
+}
+
+private fun DrawScope.drawPhotoresistor() {
+    softShadow(0f, 18f, 46f, 5f, 0.45f)
+    drawLine(Color(0xFF151A21), Offset(-55f, 0f), Offset(55f, 0f), 3.2f, StrokeCap.Round)
+    bindingPost(-55f, 0f)
+    bindingPost(55f, 0f)
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            listOf(Color(0xFFD7E6F5), Color(0xFF9DBDD8), Color(0xFF55789A)),
+            startY = -14f,
+            endY = 14f,
+        ),
+        topLeft = Offset(-38f, -14f),
+        size = Size(76f, 28f),
+        cornerRadius = CornerRadius(9f, 9f),
+    )
+    drawRoundRect(
+        color = Color(0xFF233D55).copy(alpha = 0.8f),
+        topLeft = Offset(-20f, -8f),
+        size = Size(40f, 16f),
+        cornerRadius = CornerRadius(7f, 7f),
+    )
+    for (x in listOf(-11f, 0f, 11f)) {
+        drawLine(Color(0xFFBDEEFF), Offset(x, -5f), Offset(x, 5f), 1.1f)
+    }
+    for (x in listOf(-15f, -5f, 5f, 15f)) {
+        drawLine(Color(0xFFFFE08A), Offset(x - 8f, -24f), Offset(x - 2f, -17f), 1.4f)
+        drawLine(Color(0xFFFFE08A), Offset(x - 8f, -24f), Offset(x - 12f, -17f), 1.4f)
+    }
+}
 
 private fun DrawScope.drawResistor() {
     softShadow(0f, 20f, 40f, 4.5f, 0.46f)

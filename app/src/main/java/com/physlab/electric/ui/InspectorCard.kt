@@ -321,7 +321,7 @@ private fun ComponentInspector(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                SpecText("当前阻值 ${formatNumber(component.resistance)} Ω")
+                SpecText("当前阻值 ${formatNumber(component.sensorResistance)} Ω")
                 if (showReadings) {
                     ReadingRow("发热功率", "${formatNumber(reading?.power ?: 0f)} W")
                 }

@@ -13,8 +13,8 @@
 | 证书 SHA-256 | `12ffb476271873e88ba67fdfc12b92102a6698939efd98ba3b6a72e90b44f73f` |
 | 证书 SHA-1 | `f74d01cd80c0a4d9b22810fcb8eabdc69ed75233` |
 | 版本 | 2.5.0（versionCode 50） |
-| APK SHA-256 | `D1A66D2EA43D8C909DAA2CF8CFE0F625509B6537BADF6DE7F499C69436D3302A` |
-| APK 大小 | 7,108,441 字节（约 6.78 MiB） |
+| APK SHA-256 | `43667B83A00AE6207B35DFA01B3FEEEF98EC03D0796A039DE6B6FA0EE20D57B5` |
+| APK 大小 | 7,108,444 字节（约 6.78 MiB） |
 
 签名口令、别名和 keystore 路径保存在 `keystore.properties`。该文件和 `keystore/` 目录属于私密材料，**不要上传到公开仓库**，并请至少备份两份。丢失签名私钥后将无法为已安装用户提供覆盖升级。
 

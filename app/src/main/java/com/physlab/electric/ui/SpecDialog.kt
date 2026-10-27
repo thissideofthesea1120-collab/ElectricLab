@@ -217,25 +217,46 @@ fun InstrumentSpecDialog(
                         )
                     }
 
-                    InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> {
-                        Text(
-                            if (component.type == InstrumentType.THERMISTOR) "热敏电阻阻值" else "光敏电阻阻值",
-                            color = LabColors.InkMuted,
-                            fontSize = 10.sp,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (value in listOf(100f, 500f, 1_000f, 2_000f, 10_000f)) {
-                                OptionChip(
-                                    if (value >= 1000f) "${(value / 1000f).toInt()} kΩ" else "${value.toInt()} Ω",
-                                    component.resistance == value,
-                                ) {
-                                    editor.setResistance(component.id, value)
-                                }
-                            }
+                                        InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> {
+                        if (component.type == InstrumentType.THERMISTOR) {
+                            Text(
+                                "温度 ${component.temperatureC.toInt()} ℃",
+                                color = LabColors.Ink,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "NTC：温度升高，电阻减小；当前 ${formatNumber(component.thermistorResistance)} Ω",
+                                color = LabColors.InkMuted,
+                                fontSize = 9.5.sp,
+                            )
+                            Slider(
+                                value = component.temperatureC,
+                                onValueChange = { editor.setTemperatureC(component.id, it) },
+                                valueRange = -20f..120f,
+                            )
+                        } else {
+                            Text(
+                                "光照强度 ${component.lightPercent.toInt()}%",
+                                color = LabColors.Ink,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "光照增强，电阻减小；当前 ${formatNumber(component.photoresistorResistance)} Ω",
+                                color = LabColors.InkMuted,
+                                fontSize = 9.5.sp,
+                            )
+                            Slider(
+                                value = component.lightPercent,
+                                onValueChange = { editor.setLightPercent(component.id, it) },
+                                valueRange = 0f..100f,
+                            )
                         }
                     }
 
                     InstrumentType.RESISTOR -> {
+
                         if (component.resistanceHidden) {
                             Text(
                                 "未知定值电阻：阻值待测，不能查看或更改规格。",
@@ -529,8 +550,10 @@ private fun InstrumentDetailSummary(
             if (component.resistanceHidden) "未知定值电阻（阻值待测）"
             else "定值电阻 ${formatNumber(component.resistance)} Ω"
         component.type == InstrumentType.DIODE -> "普通二极管 · 单向导电"
-        component.type == InstrumentType.THERMISTOR -> "热敏电阻 ${formatNumber(component.resistance)} Ω"
-        component.type == InstrumentType.PHOTORESISTOR -> "光敏电阻 ${formatNumber(component.resistance)} Ω"
+        component.type == InstrumentType.THERMISTOR ->
+            "热敏电阻 ${component.temperatureC.toInt()} ℃ · ${formatNumber(component.thermistorResistance)} Ω"
+        component.type == InstrumentType.PHOTORESISTOR ->
+            "光敏电阻 ${component.lightPercent.toInt()}% 光照 · ${formatNumber(component.photoresistorResistance)} Ω"
         component.type == InstrumentType.RESISTANCE_BOX -> "电阻箱 ${component.resistanceBoxValue} Ω"
         component.type == InstrumentType.RESISTANCE_WIRE ->
             "${component.wireSample.name} · ${component.wireSample.material.label} · " +

@@ -757,6 +757,26 @@ class LabEditorState {
         }
     }
 
+    fun setLightPercent(id: Long, percent: Float) {
+        components = components.map {
+            if (it.id == id && it.type == InstrumentType.PHOTORESISTOR) {
+                it.copy(lightPercent = percent.coerceIn(0f, 100f))
+            } else {
+                it
+            }
+        }
+    }
+
+    fun setTemperatureC(id: Long, temperature: Float) {
+        components = components.map {
+            if (it.id == id && it.type == InstrumentType.THERMISTOR) {
+                it.copy(temperatureC = temperature.coerceIn(-20f, 120f))
+            } else {
+                it
+            }
+        }
+    }
+
     fun setResistanceHidden(id: Long, hidden: Boolean) {
         components = components.map {
             if (it.id == id && it.type == InstrumentType.RESISTOR) {
@@ -1064,6 +1084,8 @@ class LabEditorState {
                     put("lampSpec", component.lampSpec.name)
                     put("resistance", component.resistance)
                     put("resistanceHidden", component.resistanceHidden)
+                    put("lightPercent", component.lightPercent)
+                    put("temperatureC", component.temperatureC)
                     put("slider", component.slider)
                     put("rheostatMax", component.rheostatMax)
                     put("supplyVoltage", component.supplyVoltage)
@@ -1155,6 +1177,8 @@ class LabEditorState {
                 }.getOrDefault(LampSpec.V2_5_0_3),
                 resistance = item.optDouble("resistance", 10.0).toFloat(),
                 resistanceHidden = item.optBoolean("resistanceHidden", false),
+                lightPercent = item.optDouble("lightPercent", 50.0).toFloat().coerceIn(0f, 100f),
+                temperatureC = item.optDouble("temperatureC", 25.0).toFloat().coerceIn(-20f, 120f),
                 slider = item.optDouble("slider", 0.5).toFloat().coerceIn(0f, 1f),
                 rheostatMax = item.optDouble("rheostatMax", 20.0).toFloat().coerceIn(1f, 100f),
                 supplyVoltage = item.optDouble("supplyVoltage", 12.0).toFloat().coerceIn(0f, 36f),
