@@ -75,7 +75,7 @@ class FieldEditorState {
     var showForces by mutableStateOf(true)
     var selectedChargeId by mutableStateOf<Long?>(null)
     var selectedParticleId by mutableStateOf<Long?>(null)
-    var viewZoom by mutableStateOf(1f)
+    var viewZoom by mutableStateOf(1.8f)
     var viewPan by mutableStateOf(Offset.Zero)
     private var nextId = 10L
     private var initialParticles = particles
@@ -117,7 +117,10 @@ class FieldEditorState {
         if (charge != null && (charge.position - point).getDistance() < 0.06f) {
             selectedChargeId = charge.id
             selectedParticleId = null
+            return
         }
+        selectedChargeId = null
+        selectedParticleId = null
     }
 
     fun dragSelected(delta: Offset) {
@@ -163,7 +166,7 @@ class FieldEditorState {
     }
 
     fun resetView() {
-        viewZoom = 1f
+        viewZoom = 1.8f
         viewPan = Offset.Zero
     }
 
@@ -175,6 +178,7 @@ class FieldEditorState {
 
 @Composable
 fun FieldLabScreen(state: FieldEditorState, onClose: () -> Unit) {
+    var panelOpen by remember { mutableStateOf(true) }
     LaunchedEffect(state.running) {
         if (!state.running) return@LaunchedEffect
         while (true) {
@@ -196,6 +200,8 @@ fun FieldLabScreen(state: FieldEditorState, onClose: () -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 FieldButton("重置粒子") { state.resetParticles() }
                 Spacer(Modifier.width(8.dp))
+                FieldButton(if (panelOpen) "收起面板" else "展开面板") { panelOpen = !panelOpen }
+                Spacer(Modifier.width(8.dp))
                 FieldButton("复位视图") { state.resetView() }
                 Spacer(Modifier.width(8.dp))
                 FieldButton("清空") { state.clearAll() }
@@ -204,7 +210,9 @@ fun FieldLabScreen(state: FieldEditorState, onClose: () -> Unit) {
             }
             Row(Modifier.fillMaxSize()) {
                 FieldCanvas(state, Modifier.weight(1f).fillMaxSize())
-                FieldPanel(state, Modifier.width(286.dp).fillMaxSize())
+                if (panelOpen) {
+                    FieldPanel(state, Modifier.width(286.dp).fillMaxSize())
+                }
             }
         }
     }
@@ -246,9 +254,8 @@ private fun FieldCanvas(state: FieldEditorState, modifier: Modifier = Modifier) 
                             ((centroid.x - center.x - state.viewPan.x) / state.viewZoom + center.x) / width,
                             ((centroid.y - center.y - state.viewPan.y) / state.viewZoom + center.y) / height,
                         )
-                        if (state.selectedChargeId == null && state.selectedParticleId == null) {
-                            state.selectAt(toNorm)
-                        }
+                        // 每次单指拖动都重新命中，保证任意电荷/粒子都能拖动。
+                        state.selectAt(toNorm)
                         if (state.selectedChargeId != null || state.selectedParticleId != null) {
                             state.dragSelected(
                                 Offset(
