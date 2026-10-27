@@ -220,6 +220,13 @@ class FieldEditorState {
         }
     }
 
+    fun updateSelectedPlateLength(value: Float) {
+        val id = selectedParallelPlateId ?: return
+        parallelPlates = parallelPlates.map {
+            if (it.id == id) it.copy(length = value.coerceIn(0.15f, 0.8f)) else it
+        }
+    }
+
     fun updateSelectedUniformStrength(value: Float) {
         val id = selectedUniformFieldId ?: return
         uniformFields = uniformFields.map { if (it.id == id) it.copy(strength = value.coerceIn(0f, 0.6f)) else it }
@@ -704,6 +711,16 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
                 value = selectedPlate.separation,
                 onValueChange = { state.updateSelectedPlateSeparation(it) },
                 valueRange = 0.06f..0.35f,
+            )
+            Text(
+                "板长 ${String.format(java.util.Locale.US, "%.2f", selectedPlate.length)}",
+                color = LabColors.InkMuted,
+                fontSize = 10.sp,
+            )
+            Slider(
+                value = selectedPlate.length,
+                onValueChange = { state.updateSelectedPlateLength(it) },
+                valueRange = 0.15f..0.8f,
             )
             FieldButton("删除平行板") { state.removeSelected() }
         }
