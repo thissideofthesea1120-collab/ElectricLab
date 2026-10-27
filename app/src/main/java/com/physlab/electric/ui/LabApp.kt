@@ -212,6 +212,8 @@ fun LabApp(
     var snapshotDialogOpen by remember { mutableStateOf(false) }
     var recordDialogOpen by remember { mutableStateOf(false) }
     var changelogOpen by remember { mutableStateOf(false) }
+    var fieldOpen by remember { mutableStateOf(false) }
+    val fieldEditor = remember { FieldEditorState() }
     var challengeExitConfirm by remember { mutableStateOf(false) }
     var snapshots by remember { mutableStateOf(SnapshotStore.load(context)) }
     val finishGuide: () -> Unit = {
@@ -326,6 +328,7 @@ fun LabApp(
                 showMagneticField = showMagneticField,
                 onToggleMagneticField = { showMagneticField = !showMagneticField },
                 onOpenTemplates = { editor.updateTemplateDialog(true) },
+                onOpenField = { fieldOpen = true },
                 onOpenChallenge = { editor.openChallenge() },
                 onOpenSnapshots = { snapshotDialogOpen = true },
                 onOpenRecords = { recordDialogOpen = true },
@@ -754,15 +757,16 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.4.1", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.4.2", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.4.1 · 仪器旋转\n\n" +
-                            "• 所有仪器可旋转（电池组、灯泡、电阻、开关、电容、电感、电动机、蜂鸣器、磁体等）\n" +
-                            "• 多用电表、其他电表、小磁针、回形针不可旋转\n" +
-                            "• 详情页底部提供快捷旋转按钮\n" +
-                            "• 仪器上方绿色手柄可拖动旋转\n" +
-                            "• 保留 v2.4.0 多用电表和各项修正",
+                        "2.4.2 · 电场实验\n\n" +
+                            "• 顶部新增“电场”入口，与电路实验独立\n" +
+                            "• 正负点电荷、拖动与电荷量调节\n" +
+                            "• 电场线、电场方向和受力箭头\n" +
+                            "• 正负试探粒子、初速度、运动轨迹\n" +
+                            "• 暂停、继续、重置粒子\n" +
+                            "• 返回电路不丢失电路状态",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,
@@ -842,6 +846,10 @@ fun LabApp(
                 onLoadSeriesTemplate = { editor.loadExample() },
             )
         }
+
+        if (fieldOpen) {
+            FieldLabScreen(state = fieldEditor, onClose = { fieldOpen = false })
+        }
     }
 }
 
@@ -857,6 +865,7 @@ private fun EditorTopBar(
     showMagneticField: Boolean,
     onToggleMagneticField: () -> Unit,
     onOpenTemplates: () -> Unit,
+    onOpenField: () -> Unit,
     onOpenChallenge: () -> Unit,
     onOpenSnapshots: () -> Unit,
     onOpenRecords: () -> Unit,
@@ -919,6 +928,8 @@ private fun EditorTopBar(
 
             Spacer(if (portrait) Modifier.width(14.dp) else Modifier.weight(1f))
 
+            TopTextButton("电场", onOpenField)
+            Spacer(Modifier.width(4.dp))
             TopTextButton("记录表", onOpenRecords)
             Spacer(Modifier.width(4.dp))
             DisplayToggle(
