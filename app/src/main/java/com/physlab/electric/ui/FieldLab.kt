@@ -4,7 +4,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -74,6 +75,8 @@ class FieldEditorState {
     var showForces by mutableStateOf(true)
     var selectedChargeId by mutableStateOf<Long?>(null)
     var selectedParticleId by mutableStateOf<Long?>(null)
+    var viewZoom by mutableStateOf(1f)
+    var viewPan by mutableStateOf(Offset.Zero)
     private var nextId = 10L
     private var initialParticles = particles
 
@@ -159,6 +162,11 @@ class FieldEditorState {
         particles = FieldEngine.stepParticles(particles, charges, dt)
     }
 
+    fun resetView() {
+        viewZoom = 1f
+        viewPan = Offset.Zero
+    }
+
     private fun clampPoint(point: Offset) = Offset(
         point.x.coerceIn(0.04f, 0.96f),
         point.y.coerceIn(0.08f, 0.92f),
@@ -187,6 +195,8 @@ fun FieldLabScreen(state: FieldEditorState, onClose: () -> Unit) {
                 FieldButton(if (state.running) "暂停" else "播放") { state.running = !state.running }
                 Spacer(Modifier.width(8.dp))
                 FieldButton("重置粒子") { state.resetParticles() }
+                Spacer(Modifier.width(8.dp))
+                FieldButton("复位视图") { state.resetView() }
                 Spacer(Modifier.width(8.dp))
                 FieldButton("清空") { state.clearAll() }
                 Spacer(Modifier.width(8.dp))
@@ -223,76 +233,90 @@ private fun FieldCanvas(state: FieldEditorState, modifier: Modifier = Modifier) 
             .background(Color(0xFF080D13))
             .onSizeChanged { boardSize = it }
             .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        if (boardSize.width > 0 && boardSize.height > 0) {
-                            state.selectAt(
-                                Offset(offset.x / boardSize.width, offset.y / boardSize.height),
-                            )
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    if (boardSize.width <= 0 || boardSize.height <= 0) return@detectTransformGestures
+                    val width = boardSize.width.toFloat()
+                    val height = boardSize.height.toFloat()
+                    val center = Offset(width / 2f, height / 2f)
+                    if (zoom != 1f) {
+                        state.viewZoom = (state.viewZoom * zoom).coerceIn(0.7f, 3f)
+                        state.viewPan += pan
+                    } else {
+                        val toNorm = Offset(
+                            ((centroid.x - center.x - state.viewPan.x) / state.viewZoom + center.x) / width,
+                            ((centroid.y - center.y - state.viewPan.y) / state.viewZoom + center.y) / height,
+                        )
+                        if (state.selectedChargeId == null && state.selectedParticleId == null) {
+                            state.selectAt(toNorm)
                         }
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        if (boardSize.width > 0 && boardSize.height > 0) {
+                        if (state.selectedChargeId != null || state.selectedParticleId != null) {
                             state.dragSelected(
                                 Offset(
-                                    dragAmount.x / boardSize.width,
-                                    dragAmount.y / boardSize.height,
+                                    pan.x / (width * state.viewZoom),
+                                    pan.y / (height * state.viewZoom),
                                 ),
                             )
+                        } else {
+                            state.viewPan += pan
                         }
-                    },
-                )
+                    }
+                }
             },
     ) {
-        drawFieldGrid()
-        if (state.showFieldLines) drawFieldLines(state.charges)
-        if (state.showForces) drawForceArrows(state.charges)
-        state.charges.forEach { charge ->
-            val p = charge.position.toCanvas(size)
-            val color = if (charge.chargeMicroC >= 0f) Color(0xFFFF5C67) else Color(0xFF5AB6FF)
-            drawCircle(color.copy(alpha = 0.18f), 28f, p)
-            drawCircle(color, 15f, p)
-            drawCircle(Color.White.copy(alpha = 0.65f), 4f, p)
-            drawCircle(
-                if (state.selectedChargeId == charge.id) Color.White else color.copy(alpha = 0.4f),
-                19f,
-                p,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(2f),
-            )
-            drawFieldText(
-                "${if (charge.chargeMicroC >= 0f) "+" else "−"}${abs(charge.chargeMicroC).format1()} μC",
-                p + Offset(0f, 34f),
-                Color(0xFFDCE9F6),
-            )
-            drawFieldText(charge.label, p + Offset(0f, -28f), color)
-        }
-        state.particles.forEach { particle ->
-            if (particle.trail.size > 1) {
-                val path = Path()
-                particle.trail.forEachIndexed { index, point ->
-                    val p = point.toCanvas(size)
-                    if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
-                }
-                drawPath(path, Color(0xFF89E8FF).copy(alpha = 0.55f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.4f))
+        val center = Offset(size.width / 2f, size.height / 2f)
+        withTransform({
+            translate(state.viewPan.x, state.viewPan.y)
+            scale(state.viewZoom, state.viewZoom, pivot = center)
+        }) {
+            drawFieldGrid()
+            if (state.showFieldLines) drawFieldLines(state.charges)
+            if (state.showForces) drawForceArrows(state.charges)
+            state.charges.forEach { charge ->
+                val p = charge.position.toCanvas(size)
+                val color = if (charge.chargeMicroC >= 0f) Color(0xFFFF5C67) else Color(0xFF5AB6FF)
+                drawCircle(color.copy(alpha = 0.18f), 28f, p)
+                drawCircle(color, 15f, p)
+                drawCircle(Color.White.copy(alpha = 0.65f), 4f, p)
+                drawCircle(
+                    if (state.selectedChargeId == charge.id) Color.White else color.copy(alpha = 0.4f),
+                    19f,
+                    p,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(2f),
+                )
+                drawFieldText(
+                    "${if (charge.chargeMicroC >= 0f) "+" else "−"}${abs(charge.chargeMicroC).format1()} μC",
+                    p + Offset(0f, 34f),
+                    Color(0xFFDCE9F6),
+                )
+                drawFieldText(charge.label, p + Offset(0f, -28f), color)
             }
-            val p = particle.position.toCanvas(size)
-            val color = if (particle.chargeMicroC >= 0f) Color(0xFFFFE08A) else Color(0xFF9DDBFF)
-            drawCircle(color.copy(alpha = 0.22f), 18f, p)
-            drawCircle(color, 8f, p)
-            drawCircle(
-                if (state.selectedParticleId == particle.id) Color.White else color.copy(alpha = 0.45f),
-                13f,
-                p,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(1.8f),
+            state.particles.forEach { particle ->
+                if (particle.trail.size > 1) {
+                    val path = Path()
+                    particle.trail.forEachIndexed { index, point ->
+                        val p = point.toCanvas(size)
+                        if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+                    }
+                    drawPath(path, Color(0xFF89E8FF).copy(alpha = 0.55f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.4f))
+                }
+                val p = particle.position.toCanvas(size)
+                val color = if (particle.chargeMicroC >= 0f) Color(0xFFFFE08A) else Color(0xFF9DDBFF)
+                drawCircle(color.copy(alpha = 0.22f), 18f, p)
+                drawCircle(color, 8f, p)
+                drawCircle(
+                    if (state.selectedParticleId == particle.id) Color.White else color.copy(alpha = 0.45f),
+                    13f,
+                    p,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(1.8f),
+                )
+                drawFieldText(particle.label, p + Offset(0f, -20f), color)
+            }
+            drawFieldText(
+                "拖动电荷/粒子移动 · 双指缩放 · 右侧添加与调参",
+                Offset(size.width * 0.5f, size.height - 18f),
+                Color(0xFF7D91A8),
             )
-            drawFieldText(particle.label, p + Offset(0f, -20f), color)
         }
-        drawFieldText(
-            "拖动电荷/粒子移动 · 右侧添加与调参",
-            Offset(size.width * 0.5f, size.height - 18f),
-            Color(0xFF7D91A8),
-        )
     }
 }
 
@@ -329,8 +353,30 @@ private fun DrawScope.drawFieldLines(charges: List<FieldCharge>) {
                 if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
             }
             drawPath(path, Color(0xFF5BC6D9).copy(alpha = 0.42f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.1f))
+            var arrowIndex = 10
+            while (arrowIndex < points.size - 1) {
+                val p = points[arrowIndex]
+                val field = FieldEngine.electricFieldAt(p, charges)
+                val fieldLength = field.getDistance()
+                if (fieldLength > 0.00001f) {
+                    drawFieldLineArrow(
+                        p.toCanvas(size),
+                        Offset(field.x / fieldLength, field.y / fieldLength),
+                        Color(0xFF79D8E8).copy(alpha = 0.72f),
+                    )
+                }
+                arrowIndex += 14
+            }
         }
     }
+}
+
+private fun DrawScope.drawFieldLineArrow(position: Offset, unit: Offset, color: Color) {
+    val normal = Offset(-unit.y, unit.x)
+    val tip = position + unit * 5.5f
+    val back = position - unit * 3.5f
+    drawLine(color, back + normal * 3.2f, tip, 1.2f, androidx.compose.ui.graphics.StrokeCap.Round)
+    drawLine(color, back - normal * 3.2f, tip, 1.2f, androidx.compose.ui.graphics.StrokeCap.Round)
 }
 
 private fun DrawScope.drawForceArrows(charges: List<FieldCharge>) {

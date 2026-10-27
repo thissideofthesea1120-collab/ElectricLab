@@ -757,16 +757,16 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.4.2", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.4.3", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.4.2 · 电场实验\n\n" +
-                            "• 顶部新增“电场”入口，与电路实验独立\n" +
-                            "• 正负点电荷、拖动与电荷量调节\n" +
-                            "• 电场线、电场方向和受力箭头\n" +
-                            "• 正负试探粒子、初速度、运动轨迹\n" +
-                            "• 暂停、继续、重置粒子\n" +
-                            "• 返回电路不丢失电路状态",
+                        "2.4.3 · 电场方向与缩放\n\n" +
+                            "• 电场线上增加方向箭头\n" +
+                            "• 箭头按实际电场方向绘制\n" +
+                            "• 双指缩放实验台\n" +
+                            "• 双指拖动视图\n" +
+                            "• 单指拖动电荷或试探粒子\n" +
+                            "• 新增“复位视图”按钮",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,

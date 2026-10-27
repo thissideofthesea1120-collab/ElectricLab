@@ -12,9 +12,9 @@
 | 证书 DN | `CN=ElectricLab, OU=Junior Physics Lab, O=PhysLab, L=Beijing, ST=Beijing, C=CN` |
 | 证书 SHA-256 | `12ffb476271873e88ba67fdfc12b92102a6698939efd98ba3b6a72e90b44f73f` |
 | 证书 SHA-1 | `f74d01cd80c0a4d9b22810fcb8eabdc69ed75233` |
-| 版本 | 2.4.2（versionCode 47） |
-| APK SHA-256 | `AD2A112CDEF3CFE4555F7187E01327E040E6B9D9252B6BB0DC3AAE014B63571D` |
-| APK 大小 | 7,075,672 字节（约 6.75 MiB） |
+| 版本 | 2.4.3（versionCode 48） |
+| APK SHA-256 | `89613A587559F3F32231A64F352C95CE3270B029BE0DE6D9C173594871CAC5C1` |
+| APK 大小 | 7,075,670 字节（约 6.75 MiB） |
 
 签名口令、别名和 keystore 路径保存在 `keystore.properties`。该文件和 `keystore/` 目录属于私密材料，**不要上传到公开仓库**，并请至少备份两份。丢失签名私钥后将无法为已安装用户提供覆盖升级。
 
