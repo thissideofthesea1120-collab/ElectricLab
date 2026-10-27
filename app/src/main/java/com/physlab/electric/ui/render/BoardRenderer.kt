@@ -1031,8 +1031,11 @@ private fun compassAngle(
                 (solution.readings[candidate.id]?.energized == true)))
     }
     if (sources.isEmpty()) return 0f
-    // 小磁针的 N 极指向磁体的 S 极。
-    val southPoles = sources.mapNotNull { source ->
+    // 用磁偶极场方向驱动小磁针，而不是简单指向最近磁极。
+    // 磁偶极矩方向为 S -> N；小磁针 N 极沿磁场方向。
+    var bx = 0.0
+    var by = 0.0
+    for (source in sources) {
         val reading = solution.readings[source.id] ?: ComponentReading()
         val reversed = when {
             source.type == InstrumentType.ELECTROMAGNET ->
@@ -1042,24 +1045,46 @@ private fun compassAngle(
             source.type.isMagnet -> source.polarityFlipped
             else -> false
         }
-        val offset = when (source.type) {
-            InstrumentType.BAR_MAGNET ->
-                if (reversed) Offset(-38f, 0f) else Offset(38f, 0f)
-            InstrumentType.HORSESHOE_MAGNET ->
-                if (reversed) Offset(-25f, -18f) else Offset(25f, -18f)
-            InstrumentType.ELECTROMAGNET ->
-                if (reversed) Offset(40f, 0f) else Offset(-44f, 0f)
-            InstrumentType.SOLENOID ->
-                if (reversed) Offset(-46f, 0f) else Offset(46f, 0f)
-            else -> null
-        } ?: return@mapNotNull null
-        source.center + rotateOffset(offset, source.rotation)
+        val northOffset: Offset
+        val southOffset: Offset
+        when (source.type) {
+            InstrumentType.BAR_MAGNET -> {
+                northOffset = if (reversed) Offset(38f, 0f) else Offset(-38f, 0f)
+                southOffset = if (reversed) Offset(-38f, 0f) else Offset(38f, 0f)
+            }
+            InstrumentType.HORSESHOE_MAGNET -> {
+                northOffset = if (reversed) Offset(25f, -18f) else Offset(-25f, -18f)
+                southOffset = if (reversed) Offset(-25f, -18f) else Offset(25f, -18f)
+            }
+            InstrumentType.ELECTROMAGNET -> {
+                northOffset = if (reversed) Offset(-44f, 0f) else Offset(40f, 0f)
+                southOffset = if (reversed) Offset(40f, 0f) else Offset(-44f, 0f)
+            }
+            InstrumentType.SOLENOID -> {
+                northOffset = if (reversed) Offset(46f, 0f) else Offset(-46f, 0f)
+                southOffset = if (reversed) Offset(-46f, 0f) else Offset(46f, 0f)
+            }
+            else -> continue
+        }
+        val north = source.center + rotateOffset(northOffset, source.rotation)
+        val south = source.center + rotateOffset(southOffset, source.rotation)
+        val moment = north - south
+        val momentLength = moment.getDistance()
+        if (momentLength < 0.001f) continue
+        val mx = moment.x / momentLength
+        val my = moment.y / momentLength
+        val rx = (compass.center.x - source.center.x).toDouble()
+        val ry = (compass.center.y - source.center.y).toDouble()
+        val r2 = rx * rx + ry * ry
+        if (r2 < 1.0) continue
+        val r3 = r2 * kotlin.math.sqrt(r2)
+        val dot = mx * rx + my * ry
+        // 磁偶极场：B ∝ 3(m·r)r/r^5 - m/r^3
+        bx += (3.0 * dot * rx / (r2 * r3)) - mx / r3
+        by += (3.0 * dot * ry / (r2 * r3)) - my / r3
     }
-    if (southPoles.isEmpty()) return 0f
-    val nearest = southPoles.minByOrNull { (it - compass.center).getDistanceSquared() } ?: return 0f
-    val delta = nearest - compass.center
-    if (delta.getDistance() < 1f) return 0f
-    return Math.toDegrees(atan2(delta.y.toDouble(), delta.x.toDouble())).toFloat() + 90f
+    if (kotlin.math.abs(bx) < 1e-9 && kotlin.math.abs(by) < 1e-9) return 0f
+    return Math.toDegrees(atan2(by, bx)).toFloat() + 90f
 }
 
 private fun paperclipAttraction(
