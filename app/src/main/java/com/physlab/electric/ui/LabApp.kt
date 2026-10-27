@@ -757,20 +757,16 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.4.4", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.5.0", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.4.4 · 平行板与粒子\n\n" +
-                            "• 新增电子、质子、α粒子\n" +
-                            "• 显示真实电荷与质量\n" +
-                            "• 初速度方向 -180°～+180°\n" +
-                            "• 匀强电场范围、场强可调\n" +
-                            "• 平行板方向、板宽、场强可调\n" +
-                            "• 点电荷固定，只有粒子运动\n" +
-                            "• 匀强电场、平行板可选中拖动\n" +
-                            "• 新增粒子源，发射后射入平行板\n" +
-                            "• 粒子可射出、击中极板或飞出\n" +
-                            "• 平行板内按 E = U / d 加速粒子",
+                        "2.5.0 · 我的模板\n\n" +
+                            "• 当前实验可保存为模板\n" +
+                            "• 保留仪器位置、接线和导线拐点\n" +
+                            "• 我的模板支持载入、删除\n" +
+                            "• 支持复制模板 JSON\n" +
+                            "• 支持从剪贴板导入模板\n" +
+                            "• 内置模板与我的模板分开展示",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,
