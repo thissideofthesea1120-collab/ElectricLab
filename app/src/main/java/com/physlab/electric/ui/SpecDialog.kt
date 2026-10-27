@@ -208,6 +208,33 @@ fun InstrumentSpecDialog(
                         }
                     }
 
+                    InstrumentType.DIODE -> {
+                        Text("普通二极管", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "正向导通、反向截止；可用于二极管伏安特性实验。",
+                            color = LabColors.InkMuted,
+                            fontSize = 10.sp,
+                        )
+                    }
+
+                    InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> {
+                        Text(
+                            if (component.type == InstrumentType.THERMISTOR) "热敏电阻阻值" else "光敏电阻阻值",
+                            color = LabColors.InkMuted,
+                            fontSize = 10.sp,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (value in listOf(100f, 500f, 1_000f, 2_000f, 10_000f)) {
+                                OptionChip(
+                                    if (value >= 1000f) "${(value / 1000f).toInt()} kΩ" else "${value.toInt()} Ω",
+                                    component.resistance == value,
+                                ) {
+                                    editor.setResistance(component.id, value)
+                                }
+                            }
+                        }
+                    }
+
                     InstrumentType.RESISTOR -> {
                         if (component.resistanceHidden) {
                             Text(
@@ -501,6 +528,9 @@ private fun InstrumentDetailSummary(
         component.type == InstrumentType.RESISTOR ->
             if (component.resistanceHidden) "未知定值电阻（阻值待测）"
             else "定值电阻 ${formatNumber(component.resistance)} Ω"
+        component.type == InstrumentType.DIODE -> "普通二极管 · 单向导电"
+        component.type == InstrumentType.THERMISTOR -> "热敏电阻 ${formatNumber(component.resistance)} Ω"
+        component.type == InstrumentType.PHOTORESISTOR -> "光敏电阻 ${formatNumber(component.resistance)} Ω"
         component.type == InstrumentType.RESISTANCE_BOX -> "电阻箱 ${component.resistanceBoxValue} Ω"
         component.type == InstrumentType.RESISTANCE_WIRE ->
             "${component.wireSample.name} · ${component.wireSample.material.label} · " +

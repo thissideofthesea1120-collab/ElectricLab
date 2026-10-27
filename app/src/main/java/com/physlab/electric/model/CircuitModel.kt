@@ -173,6 +173,21 @@ enum class InstrumentType(
         listOf(Offset(-27f, 32f), Offset(27f, 32f)),
         listOf("+", "−"), "LED",
     ),
+    DIODE(
+        "diode", "普通二极管", InstrumentCategory.LOAD, 84f, 72f,
+        listOf(Offset(-27f, 32f), Offset(27f, 32f)),
+        listOf("+", "−"), "D",
+    ),
+    THERMISTOR(
+        "thermistor", "热敏电阻", InstrumentCategory.LOAD, 84f, 72f,
+        listOf(Offset(-27f, 32f), Offset(27f, 32f)),
+        listOf("1", "2"), "Rt",
+    ),
+    PHOTORESISTOR(
+        "photoresistor", "光敏电阻", InstrumentCategory.LOAD, 84f, 72f,
+        listOf(Offset(-27f, 32f), Offset(27f, 32f)),
+        listOf("1", "2"), "Rg",
+    ),
     AMMETER(
         "ammeter", "电流表", InstrumentCategory.METER, 84f, 92f,
         listOf(Offset(-26f, 39f), Offset(0f, 39f), Offset(26f, 39f)),
@@ -1174,6 +1189,10 @@ private fun simulateCircuitOnce(
             component.type == InstrumentType.MOTOR -> addBranch(component.id, t0, t1, 12f)
             component.type == InstrumentType.BUZZER -> addBranch(component.id, t0, t1, 30f)
             component.type == InstrumentType.LED -> addBranch(component.id, t0, t1, 180f)
+            component.type == InstrumentType.DIODE -> addBranch(component.id, t0, t1, 30f)
+            component.type == InstrumentType.THERMISTOR ||
+                component.type == InstrumentType.PHOTORESISTOR ->
+                addBranch(component.id, t0, t1, component.resistance.coerceAtLeast(1f))
             component.type == InstrumentType.ELECTROMAGNET -> addBranch(component.id, t0, t1, 6f)
             component.type == InstrumentType.SOLENOID -> addBranch(component.id, t0, t1, 5f)
             component.type == InstrumentType.RESISTANCE_BOX ->

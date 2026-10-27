@@ -766,7 +766,8 @@ fun LabApp(
                             "• 我的模板支持载入、删除\n" +
                             "• 支持复制模板 JSON\n" +
                             "• 支持从剪贴板导入模板\n" +
-                            "• 内置模板与我的模板分开展示",
+                            "• 内置模板与我的模板分开展示\n" +
+                            "• 新增普通二极管、热敏电阻、光敏电阻",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,

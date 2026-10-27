@@ -309,6 +309,24 @@ private fun ComponentInspector(
                 }
             }
 
+            InstrumentType.DIODE -> {
+                Text("普通二极管", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                SpecText("单向导电，正向导通、反向截止")
+            }
+
+            InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> {
+                Text(
+                    if (component.type == InstrumentType.THERMISTOR) "热敏电阻" else "光敏电阻",
+                    color = LabColors.Ink,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                SpecText("当前阻值 ${formatNumber(component.resistance)} Ω")
+                if (showReadings) {
+                    ReadingRow("发热功率", "${formatNumber(reading?.power ?: 0f)} W")
+                }
+            }
+
             InstrumentType.RESISTOR -> {
                 if (component.resistanceHidden) {
                     Text("未知定值电阻（阻值待测）", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -319,11 +337,11 @@ private fun ComponentInspector(
                 if (showReadings) {
                     ReadingRow("两端电压", "${formatNumber(reading?.voltage ?: 0f)} V")
                     ReadingRow("通过电流", formatCurrent(reading?.current ?: 0f))
+                    ReadingRow("发热功率", "${formatNumber(reading?.power ?: 0f)} W")
                 } else {
                     ReadingHiddenNote()
                 }
             }
-
             InstrumentType.RESISTANCE_BOX -> {
                 Text("电阻箱 ${component.resistanceBoxValue} Ω", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 SpecText("长按仪器可调整四个旋钮（0～9999 Ω）")

@@ -87,6 +87,7 @@ fun DrawScope.drawInstrument(
             InstrumentType.MOTOR -> drawMotor(visual)
             InstrumentType.BUZZER -> drawBuzzer(visual)
             InstrumentType.LED -> drawLed(visual)
+            InstrumentType.DIODE, InstrumentType.THERMISTOR, InstrumentType.PHOTORESISTOR -> drawResistor()
             InstrumentType.AMMETER -> drawMeter(visual, isAmmeter = true)
             InstrumentType.VOLTMETER -> drawMeter(visual, isAmmeter = false)
             InstrumentType.MILLIAMMETER -> drawMeter(visual, isAmmeter = true)
