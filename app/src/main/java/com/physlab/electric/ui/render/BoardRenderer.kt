@@ -1031,7 +1031,8 @@ private fun compassAngle(
                 (solution.readings[candidate.id]?.energized == true)))
     }
     if (sources.isEmpty()) return 0f
-    val northPoles = sources.mapNotNull { source ->
+    // 小磁针的 N 极指向磁体的 S 极。
+    val southPoles = sources.mapNotNull { source ->
         val reading = solution.readings[source.id] ?: ComponentReading()
         val reversed = when {
             source.type == InstrumentType.ELECTROMAGNET ->
@@ -1043,19 +1044,19 @@ private fun compassAngle(
         }
         val offset = when (source.type) {
             InstrumentType.BAR_MAGNET ->
-                if (reversed) Offset(38f, 0f) else Offset(-38f, 0f)
+                if (reversed) Offset(-38f, 0f) else Offset(38f, 0f)
             InstrumentType.HORSESHOE_MAGNET ->
-                if (reversed) Offset(25f, -18f) else Offset(-25f, -18f)
+                if (reversed) Offset(-25f, -18f) else Offset(25f, -18f)
             InstrumentType.ELECTROMAGNET ->
-                if (reversed) Offset(-44f, 0f) else Offset(40f, 0f)
+                if (reversed) Offset(40f, 0f) else Offset(-44f, 0f)
             InstrumentType.SOLENOID ->
-                if (reversed) Offset(46f, 0f) else Offset(-46f, 0f)
+                if (reversed) Offset(-46f, 0f) else Offset(46f, 0f)
             else -> null
         } ?: return@mapNotNull null
         source.center + rotateOffset(offset, source.rotation)
     }
-    if (northPoles.isEmpty()) return 0f
-    val nearest = northPoles.minByOrNull { (it - compass.center).getDistanceSquared() } ?: return 0f
+    if (southPoles.isEmpty()) return 0f
+    val nearest = southPoles.minByOrNull { (it - compass.center).getDistanceSquared() } ?: return 0f
     val delta = nearest - compass.center
     if (delta.getDistance() < 1f) return 0f
     return Math.toDegrees(atan2(delta.y.toDouble(), delta.x.toDouble())).toFloat() + 90f
