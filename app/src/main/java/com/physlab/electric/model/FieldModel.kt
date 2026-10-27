@@ -24,6 +24,23 @@ enum class ParticleKind {
     CUSTOM,
 }
 
+enum class ParticleStatus {
+    RUNNING,
+    EXITED_PLATE,
+    HIT_PLATE,
+    LEFT_BOARD,
+    STOPPED,
+}
+
+data class ParticleSource(
+    val id: Long,
+    val position: Offset,
+    val directionDegrees: Float,
+    val kind: ParticleKind,
+    val speed: Float,
+    val label: String = "",
+)
+
 data class FieldParticle(
     val id: Long,
     val position: Offset,
@@ -38,6 +55,7 @@ data class FieldParticle(
     val chargeElementary: Float = chargeMicroC,
     val massKg: Float = 1.67e-27f,
     val effectiveMass: Float = mass,
+    val status: ParticleStatus = ParticleStatus.RUNNING,
 )
 
 data class UniformField(
@@ -66,6 +84,7 @@ data class FieldScene(
     val particles: List<FieldParticle> = emptyList(),
     val uniformFields: List<UniformField> = emptyList(),
     val parallelPlates: List<ParallelPlate> = emptyList(),
+    val particleSources: List<ParticleSource> = emptyList(),
 )
 
 object FieldEngine {
@@ -152,6 +171,7 @@ object FieldEngine {
         if (particles.isEmpty()) return particles
         val safeDt = dt.coerceIn(0f, 0.03f)
         return particles.map { particle ->
+            if (particle.status != ParticleStatus.RUNNING) return@map particle
             val force = forceAt(particle.position, particle.chargeMicroC, charges, uniformFields, parallelPlates)
             var ax = force.x / particle.effectiveMass.coerceAtLeast(0.01f)
             var ay = force.y / particle.effectiveMass.coerceAtLeast(0.01f)
@@ -169,9 +189,13 @@ object FieldEngine {
                 vx *= scale
                 vy *= scale
             }
+            val rawNext = Offset(
+                particle.position.x + vx * safeDt,
+                particle.position.y + vy * safeDt,
+            )
             val next = Offset(
-                (particle.position.x + vx * safeDt).coerceIn(0.02f, 0.98f),
-                (particle.position.y + vy * safeDt).coerceIn(0.04f, 0.96f),
+                rawNext.x.coerceIn(0.02f, 0.98f),
+                rawNext.y.coerceIn(0.04f, 0.96f),
             )
             val trail = if (particle.trail.isEmpty() ||
                 (next - particle.trail.last()).getDistance() > 0.004f
@@ -180,8 +204,66 @@ object FieldEngine {
             } else {
                 particle.trail
             }
-            particle.copy(position = next, velocity = Offset(vx, vy), trail = trail)
+            val hit = parallelPlates.firstNotNullOfOrNull { plate ->
+                hitPlate(particle.position, next, plate)
+            }
+            if (hit != null) {
+                return@map particle.copy(
+                    position = hit,
+                    velocity = Offset.Zero,
+                    trail = trail,
+                    status = ParticleStatus.HIT_PLATE,
+                )
+            }
+            val exitedPlate = parallelPlates.any { plate ->
+                val oldLocal = localPoint(particle.position, plate)
+                val newLocal = localPoint(next, plate)
+                oldLocal.x <= plate.length / 2f &&
+                    newLocal.x > plate.length / 2f &&
+                    abs(newLocal.y) <= plate.separation / 2f
+            }
+            val leftBoard = rawNext.x !in 0f..1f || rawNext.y !in 0f..1f
+            particle.copy(
+                position = next,
+                velocity = Offset(vx, vy),
+                trail = trail,
+                status = when {
+                    exitedPlate -> ParticleStatus.EXITED_PLATE
+                    leftBoard -> ParticleStatus.LEFT_BOARD
+                    else -> ParticleStatus.RUNNING
+                },
+            )
         }
+    }
+
+    private fun localPoint(point: Offset, plate: ParallelPlate): Offset =
+        rotate(point - plate.center, -plate.rotation)
+
+    private fun hitPlate(old: Offset, next: Offset, plate: ParallelPlate): Offset? {
+        val oldLocal = localPoint(old, plate)
+        val newLocal = localPoint(next, plate)
+        val halfLength = plate.length / 2f
+        val halfSeparation = plate.separation / 2f
+        val thickness = (plate.width * 0.5f).coerceAtLeast(0.002f)
+        for (surface in listOf(-halfSeparation, halfSeparation)) {
+            val oldSide = oldLocal.y - surface
+            val newSide = newLocal.y - surface
+            val crosses = oldSide == 0f || newSide == 0f || (oldSide < 0f) != (newSide < 0f)
+            if (!crosses) {
+                if (abs(newLocal.y - surface) <= thickness && abs(newLocal.x) <= halfLength) {
+                    return rotate(Offset(newLocal.x, surface), plate.rotation) + plate.center
+                }
+                continue
+            }
+            val dy = newLocal.y - oldLocal.y
+            if (abs(dy) < 0.00001f) continue
+            val t = ((surface - oldLocal.y) / dy).coerceIn(0f, 1f)
+            val x = oldLocal.x + (newLocal.x - oldLocal.x) * t
+            if (abs(x) <= halfLength) {
+                return rotate(Offset(x, surface), plate.rotation) + plate.center
+            }
+        }
+        return null
     }
 
     fun totalForceOn(index: Int, charges: List<FieldCharge>): Offset {

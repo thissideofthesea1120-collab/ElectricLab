@@ -50,6 +50,8 @@ import com.physlab.electric.model.FieldEngine
 import com.physlab.electric.model.FieldParticle
 import com.physlab.electric.model.ParallelPlate
 import com.physlab.electric.model.ParticleKind
+import com.physlab.electric.model.ParticleSource
+import com.physlab.electric.model.ParticleStatus
 import com.physlab.electric.model.UniformField
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -84,6 +86,7 @@ class FieldEditorState {
     )
     var uniformFields by mutableStateOf<List<UniformField>>(emptyList())
     var parallelPlates by mutableStateOf<List<ParallelPlate>>(emptyList())
+    var particleSources by mutableStateOf<List<ParticleSource>>(emptyList())
     var running by mutableStateOf(false)
     var showFieldLines by mutableStateOf(true)
     var showForces by mutableStateOf(true)
@@ -91,6 +94,7 @@ class FieldEditorState {
     var selectedParticleId by mutableStateOf<Long?>(null)
     var selectedUniformFieldId by mutableStateOf<Long?>(null)
     var selectedParallelPlateId by mutableStateOf<Long?>(null)
+    var selectedParticleSourceId by mutableStateOf<Long?>(null)
     var viewZoom by mutableStateOf(1.8f)
     var viewPan by mutableStateOf(Offset.Zero)
     private var nextId = 10L
@@ -145,6 +149,74 @@ class FieldEditorState {
         selectedParticleId = null
     }
 
+    fun addParticleSource() {
+        val source = ParticleSource(
+            id = nextId++,
+            position = Offset(0.28f, 0.50f),
+            directionDegrees = 0f,
+            kind = ParticleKind.PROTON,
+            speed = 0.25f,
+            label = "源${particleSources.size + 1}",
+        )
+        particleSources = particleSources + source
+        selectedParticleSourceId = source.id
+        selectedChargeId = null
+        selectedParticleId = null
+        selectedUniformFieldId = null
+        selectedParallelPlateId = null
+    }
+
+    fun fireSelectedSource() {
+        val source = particleSources.firstOrNull { it.id == selectedParticleSourceId } ?: return
+        val (charge, massKg, effectiveMass, label) = when (source.kind) {
+            ParticleKind.ELECTRON -> Quad(-1f, 9.11e-31f, 1f, "e⁻")
+            ParticleKind.PROTON -> Quad(1f, 1.67e-27f, 4f, "p⁺")
+            ParticleKind.ALPHA -> Quad(2f, 6.64e-27f, 8f, "α")
+            ParticleKind.CUSTOM -> Quad(1f, 1.67e-27f, 4f, "P")
+        }
+        val angle = Math.toRadians(source.directionDegrees.toDouble())
+        val velocity = Offset(
+            (cos(angle) * source.speed).toFloat(),
+            (sin(angle) * source.speed).toFloat(),
+        )
+        val particle = FieldParticle(
+            id = nextId++,
+            position = source.position,
+            velocity = velocity,
+            chargeMicroC = charge,
+            mass = effectiveMass,
+            label = label,
+            initialPosition = source.position,
+            initialVelocity = velocity,
+            kind = source.kind,
+            chargeElementary = charge,
+            massKg = massKg,
+            effectiveMass = effectiveMass,
+        )
+        particles = particles + particle
+        selectedParticleId = particle.id
+        selectedParticleSourceId = null
+        selectedChargeId = null
+        selectedUniformFieldId = null
+        selectedParallelPlateId = null
+        initialParticles = particles
+    }
+
+    fun updateSelectedSourceKind(kind: ParticleKind) {
+        val id = selectedParticleSourceId ?: return
+        particleSources = particleSources.map { if (it.id == id) it.copy(kind = kind) else it }
+    }
+
+    fun updateSelectedSourceSpeed(value: Float) {
+        val id = selectedParticleSourceId ?: return
+        particleSources = particleSources.map { if (it.id == id) it.copy(speed = value.coerceIn(0f, 0.8f)) else it }
+    }
+
+    fun updateSelectedSourceDirection(value: Float) {
+        val id = selectedParticleSourceId ?: return
+        particleSources = particleSources.map { if (it.id == id) it.copy(directionDegrees = value) else it }
+    }
+
     fun addParticle(kind: ParticleKind) {
         val (charge, massKg, effectiveMass, label) = when (kind) {
             ParticleKind.ELECTRON -> Quad(-1f, 9.11e-31f, 1f, "e⁻")
@@ -185,18 +257,68 @@ class FieldEditorState {
         if (particle != null && (particle.position - point).getDistance() < 0.055f) {
             selectedParticleId = particle.id
             selectedChargeId = null
+            selectedParticleSourceId = null
+            selectedUniformFieldId = null
+            selectedParallelPlateId = null
+            return
+        }
+        val source = particleSources.minByOrNull { (it.position - point).getDistanceSquared() }
+        if (source != null && (source.position - point).getDistance() < 0.055f) {
+            selectedParticleSourceId = source.id
+            selectedParticleId = null
+            selectedChargeId = null
+            selectedUniformFieldId = null
+            selectedParallelPlateId = null
             return
         }
         val charge = charges.minByOrNull { (it.position - point).getDistanceSquared() }
         if (charge != null && (charge.position - point).getDistance() < 0.06f) {
             selectedChargeId = charge.id
             selectedParticleId = null
+            selectedParticleSourceId = null
+            selectedUniformFieldId = null
+            selectedParallelPlateId = null
+            return
+        }
+        val plate = parallelPlates.lastOrNull { insidePlate(point, it) }
+        if (plate != null) {
+            selectedParallelPlateId = plate.id
+            selectedUniformFieldId = null
+            selectedParticleId = null
+            selectedChargeId = null
+            selectedParticleSourceId = null
+            return
+        }
+        val field = uniformFields.lastOrNull {
+            abs(point.x - it.center.x) <= it.width / 2f && abs(point.y - it.center.y) <= it.height / 2f
+        }
+        if (field != null) {
+            selectedUniformFieldId = field.id
+            selectedParallelPlateId = null
+            selectedParticleId = null
+            selectedChargeId = null
+            selectedParticleSourceId = null
             return
         }
         selectedChargeId = null
         selectedParticleId = null
         selectedUniformFieldId = null
         selectedParallelPlateId = null
+        selectedParticleSourceId = null
+    }
+
+    private fun insidePlate(point: Offset, plate: ParallelPlate): Boolean {
+        val local = rotate(point - plate.center, -plate.rotation)
+        return abs(local.x) <= plate.length / 2f + 0.015f &&
+            abs(local.y) <= plate.separation / 2f + plate.width
+    }
+
+    private fun rotate(value: Offset, degrees: Float): Offset {
+        if (degrees == 0f) return value
+        val radians = Math.toRadians(degrees.toDouble())
+        val c = cos(radians).toFloat()
+        val s = sin(radians).toFloat()
+        return Offset(value.x * c - value.y * s, value.x * s + value.y * c)
     }
 
     fun dragSelected(delta: Offset) {
@@ -209,6 +331,24 @@ class FieldEditorState {
         selectedChargeId?.let { id ->
             charges = charges.map {
                 if (it.id == id) it.copy(position = clampPoint(it.position + delta)) else it
+            }
+            return
+        }
+        selectedParticleSourceId?.let { id ->
+            particleSources = particleSources.map {
+                if (it.id == id) it.copy(position = clampPoint(it.position + delta)) else it
+            }
+            return
+        }
+        selectedUniformFieldId?.let { id ->
+            uniformFields = uniformFields.map {
+                if (it.id == id) it.copy(center = clampPoint(it.center + delta)) else it
+            }
+            return
+        }
+        selectedParallelPlateId?.let { id ->
+            parallelPlates = parallelPlates.map {
+                if (it.id == id) it.copy(center = clampPoint(it.center + delta)) else it
             }
         }
     }
@@ -301,15 +441,22 @@ class FieldEditorState {
         selectedParticleId?.let { id -> particles = particles.filterNot { it.id == id } }
         selectedUniformFieldId?.let { id -> uniformFields = uniformFields.filterNot { it.id == id } }
         selectedParallelPlateId?.let { id -> parallelPlates = parallelPlates.filterNot { it.id == id } }
+        selectedParticleSourceId?.let { id -> particleSources = particleSources.filterNot { it.id == id } }
         selectedChargeId = null
         selectedParticleId = null
         selectedUniformFieldId = null
         selectedParallelPlateId = null
+        selectedParticleSourceId = null
     }
 
     fun resetParticles() {
         particles = initialParticles.map {
-            it.copy(position = it.initialPosition, velocity = it.initialVelocity, trail = emptyList())
+            it.copy(
+                position = it.initialPosition,
+                velocity = it.initialVelocity,
+                trail = emptyList(),
+                status = ParticleStatus.RUNNING,
+            )
         }
     }
 
@@ -318,10 +465,12 @@ class FieldEditorState {
         particles = emptyList()
         uniformFields = emptyList()
         parallelPlates = emptyList()
+        particleSources = emptyList()
         selectedChargeId = null
         selectedParticleId = null
         selectedUniformFieldId = null
         selectedParallelPlateId = null
+        selectedParticleSourceId = null
         running = false
     }
 
@@ -440,12 +589,29 @@ private fun FieldCanvas(state: FieldEditorState, modifier: Modifier = Modifier) 
             scale(state.viewZoom, state.viewZoom, pivot = center)
         }) {
             drawFieldGrid()
-            drawUniformFields(state.uniformFields)
-            drawParallelPlates(state.parallelPlates)
+            drawUniformFields(state.uniformFields, state.selectedUniformFieldId)
+            drawParallelPlates(state.parallelPlates, state.selectedParallelPlateId)
             if (state.showFieldLines) {
                 drawFieldLines(state.charges, state.uniformFields, state.parallelPlates)
             }
             if (state.showForces) drawForceArrows(state.charges)
+            state.particleSources.forEach { source ->
+                val p = source.position.toCanvas(size)
+                val color = Color(0xFF7DE0C0)
+                val angle = Math.toRadians(source.directionDegrees.toDouble())
+                val unit = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+                drawCircle(color.copy(alpha = 0.18f), 22f, p)
+                drawCircle(color, 11f, p)
+                drawLine(color, p, p + unit * 42f, 2f)
+                drawFieldLineArrow(p + unit * 42f, unit, color)
+                drawCircle(
+                    if (state.selectedParticleSourceId == source.id) Color.White else color.copy(alpha = 0.45f),
+                    16f,
+                    p,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(2f),
+                )
+                drawFieldText(source.label, p + Offset(0f, -24f), color)
+            }
             state.charges.forEach { charge ->
                 val p = charge.position.toCanvas(size)
                 val color = if (charge.chargeMicroC >= 0f) Color(0xFFFF5C67) else Color(0xFF5AB6FF)
@@ -490,6 +656,16 @@ private fun FieldCanvas(state: FieldEditorState, modifier: Modifier = Modifier) 
                     style = androidx.compose.ui.graphics.drawscope.Stroke(1.8f),
                 )
                 drawFieldText(particle.label, p + Offset(0f, -20f), color)
+                val statusText = when (particle.status) {
+                    ParticleStatus.RUNNING -> null
+                    ParticleStatus.EXITED_PLATE -> "已射出"
+                    ParticleStatus.HIT_PLATE -> "击中极板"
+                    ParticleStatus.LEFT_BOARD -> "飞出"
+                    ParticleStatus.STOPPED -> "停止"
+                }
+                if (statusText != null) {
+                    drawFieldText(statusText, p + Offset(0f, 20f), color)
+                }
             }
             drawFieldText(
                 "拖动电荷/粒子移动 · 双指缩放 · 右侧添加与调参",
@@ -515,7 +691,7 @@ private fun DrawScope.drawFieldGrid() {
     drawRect(Color(0xFF0B1520), style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
 }
 
-private fun DrawScope.drawUniformFields(fields: List<UniformField>) {
+private fun DrawScope.drawUniformFields(fields: List<UniformField>, selectedId: Long?) {
     for (field in fields) {
         val center = field.center.toCanvas(size)
         val width = field.width * size.width
@@ -526,10 +702,10 @@ private fun DrawScope.drawUniformFields(fields: List<UniformField>) {
             size = androidx.compose.ui.geometry.Size(width, height),
         )
         drawRect(
-            Color(0xFF6BCBE0).copy(alpha = 0.42f),
+            if (field.id == selectedId) Color.White else Color(0xFF6BCBE0).copy(alpha = 0.42f),
             topLeft = Offset(center.x - width / 2f, center.y - height / 2f),
             size = androidx.compose.ui.geometry.Size(width, height),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(1.2f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(if (field.id == selectedId) 2.2f else 1.2f),
         )
         val angle = Math.toRadians(field.directionDegrees.toDouble())
         val unit = Offset(cos(angle).toFloat(), sin(angle).toFloat())
@@ -551,7 +727,7 @@ private fun DrawScope.drawUniformFields(fields: List<UniformField>) {
     }
 }
 
-private fun DrawScope.drawParallelPlates(plates: List<ParallelPlate>) {
+private fun DrawScope.drawParallelPlates(plates: List<ParallelPlate>, selectedId: Long?) {
     for (plate in plates) {
         val center = plate.center.toCanvas(size)
         val length = plate.length * size.width
@@ -574,6 +750,14 @@ private fun DrawScope.drawParallelPlates(plates: List<ParallelPlate>) {
                     Offset(x, bottom - 7f),
                     Offset(0f, if (plate.voltage >= 0f) -1f else 1f),
                     Color(0xFF7CE4F2).copy(alpha = 0.7f),
+                )
+            }
+            if (plate.id == selectedId) {
+                drawRect(
+                    Color.White.copy(alpha = 0.8f),
+                    topLeft = Offset(center.x - length / 2f - 5f, top - 7f),
+                    size = androidx.compose.ui.geometry.Size(length + 10f, separation + 14f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(1.8f),
                 )
             }
         }
@@ -695,6 +879,7 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldButton("+ 匀强电场") { state.addUniformField() }
             FieldButton("+ 平行板") { state.addParallelPlate() }
+            FieldButton("+ 粒子源") { state.addParticleSource() }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -732,6 +917,21 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
             }
             Text("$kindText ${selectedParticle.label}", color = LabColors.InkMuted, fontSize = 11.sp)
             Text(
+                when (selectedParticle.status) {
+                    ParticleStatus.RUNNING -> "状态：运动中"
+                    ParticleStatus.EXITED_PLATE -> "状态：已射出平行板"
+                    ParticleStatus.HIT_PLATE -> "状态：击中极板"
+                    ParticleStatus.LEFT_BOARD -> "状态：飞出实验台"
+                    ParticleStatus.STOPPED -> "状态：已停止"
+                },
+                color = when (selectedParticle.status) {
+                    ParticleStatus.EXITED_PLATE -> Color(0xFF7DE0C0)
+                    ParticleStatus.HIT_PLATE -> Color(0xFFFF8A92)
+                    else -> LabColors.InkFaint
+                },
+                fontSize = 10.sp,
+            )
+            Text(
                 "电荷 ${if (selectedParticle.chargeElementary >= 0f) "+" else "−"}${abs(selectedParticle.chargeElementary).format1()}e" +
                     " · 质量 ${String.format(java.util.Locale.US, "%.2e", selectedParticle.massKg)} kg",
                 color = Color(0xFFFFE08A),
@@ -755,6 +955,35 @@ private fun FieldPanel(state: FieldEditorState, modifier: Modifier = Modifier) {
                 valueRange = -180f..180f,
             )
             FieldButton("删除粒子") { state.removeSelected() }
+        }
+
+        val selectedSource = state.particleSources.firstOrNull { it.id == state.selectedParticleSourceId }
+        if (selectedSource != null) {
+            Text("${selectedSource.label} 粒子源", color = LabColors.InkMuted, fontSize = 11.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FieldButton("电子") { state.updateSelectedSourceKind(ParticleKind.ELECTRON) }
+                FieldButton("质子") { state.updateSelectedSourceKind(ParticleKind.PROTON) }
+                FieldButton("α") { state.updateSelectedSourceKind(ParticleKind.ALPHA) }
+            }
+            Text("发射速度 ${String.format(java.util.Locale.US, "%.2f", selectedSource.speed)}", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = selectedSource.speed,
+                onValueChange = { state.updateSelectedSourceSpeed(it) },
+                valueRange = 0f..0.8f,
+            )
+            val sourceAngle = if (selectedSource.directionDegrees > 180f) {
+                selectedSource.directionDegrees - 360f
+            } else {
+                selectedSource.directionDegrees
+            }
+            Text("发射方向 ${if (sourceAngle >= 0f) "+" else ""}${sourceAngle.toInt()}°", color = LabColors.InkMuted, fontSize = 10.sp)
+            Slider(
+                value = sourceAngle,
+                onValueChange = { state.updateSelectedSourceDirection(it) },
+                valueRange = -180f..180f,
+            )
+            FieldButton("发射粒子", primary = true) { state.fireSelectedSource() }
+            FieldButton("删除粒子源") { state.removeSelected() }
         }
 
         val selectedUniform = state.uniformFields.firstOrNull { it.id == state.selectedUniformFieldId }

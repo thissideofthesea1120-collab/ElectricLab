@@ -78,4 +78,34 @@ class FieldEngineTest {
         check(e.position.x < 0.5f)
         check(p.position.x > 0.5f)
     }
+
+    @Test
+    fun particleHitsPlateWhenCrossingSurface() {
+        val plate = ParallelPlate(1, Offset(0.5f, 0.5f), 0f, 0.2f, 0.4f, 0f)
+        var particle = FieldParticle(
+            id = 2,
+            position = Offset(0.5f, 0.35f),
+            velocity = Offset(0f, 0.5f),
+            chargeMicroC = 0f,
+        )
+        repeat(30) {
+            particle = FieldEngine.stepParticles(listOf(particle), emptyList(), 0.016f, emptyList(), listOf(plate)).single()
+        }
+        check(particle.status == com.physlab.electric.model.ParticleStatus.HIT_PLATE)
+    }
+
+    @Test
+    fun particleExitsPlateThroughOpenEnd() {
+        val plate = ParallelPlate(1, Offset(0.5f, 0.5f), 0f, 0.2f, 0.4f, 0f)
+        var particle = FieldParticle(
+            id = 2,
+            position = Offset(0.5f, 0.5f),
+            velocity = Offset(0.4f, 0f),
+            chargeMicroC = 0f,
+        )
+        repeat(80) {
+            particle = FieldEngine.stepParticles(listOf(particle), emptyList(), 0.016f, emptyList(), listOf(plate)).single()
+        }
+        check(particle.status == com.physlab.electric.model.ParticleStatus.EXITED_PLATE)
+    }
 }
