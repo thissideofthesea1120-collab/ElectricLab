@@ -145,6 +145,8 @@ class HouseholdState {
     private var nextId = 1L
     private var nextWireId = 1L
 
+    val lampOn: Boolean get() = isLampOn(this)
+    val socketPowered: Boolean get() = socketLive(this)
     val totalPower: Float
         get() {
             val lamp = if (isLampOn(this)) 40f else 0f
