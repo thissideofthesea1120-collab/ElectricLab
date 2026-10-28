@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -130,28 +131,26 @@ class HouseholdState {
     fun resetTemplate() {
         nextId = 1L
         nextWireId = 1L
-        val source = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.METER, Offset(0.10f, 0.62f), false)
-        val main = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.MAIN, Offset(0.23f, 0.62f), true)
-        val busL = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_PHASE, Offset(0.62f, 0.17f), false)
-        val busN = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_NEUTRAL, Offset(0.62f, 0.25f), false)
-        val busPE = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_PE, Offset(0.62f, 0.33f), false)
-        val lamp = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.LAMP, Offset(0.50f, 0.62f), false)
-        val switch = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SWITCH, Offset(0.38f, 0.50f), true)
-        val socket = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SOCKET3, Offset(0.78f, 0.62f), false)
+        val source = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.METER, Offset(0.15f, 0.58f), false)
+        val main = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.MAIN, Offset(0.31f, 0.58f), true)
+        val busL = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_PHASE, Offset(0.62f, 0.15f), false)
+        val busN = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_NEUTRAL, Offset(0.62f, 0.23f), false)
+        val busPE = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_PE, Offset(0.62f, 0.31f), false)
+        val lamp = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.LAMP, Offset(0.567f, 0.64f), false)
+        val switch = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SWITCH, Offset(0.462f, 0.48f), false)
+        val socket = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SOCKET3, Offset(0.884f, 0.64f), false)
         devices = listOf(source, main, busL, busN, busPE, lamp, switch, socket)
         wires = buildList {
-            add(wire(0, 1, 0, 0, HouseholdWireKind.PHASE)) // meter L out -> main L in
             add(wire(0, 1, 1, 0, HouseholdWireKind.PHASE))
-            add(wire(1, 0, 2, 0, HouseholdWireKind.PHASE))
+            add(wire(1, 1, 2, 0, HouseholdWireKind.PHASE))
             add(wire(0, 3, 1, 2, HouseholdWireKind.NEUTRAL))
-            add(wire(1, 2, 3, 0, HouseholdWireKind.NEUTRAL))
-            add(wire(2, 0, 5, 0, HouseholdWireKind.LOAD))
-            add(wire(5, 1, 3, 1, HouseholdWireKind.LOAD))
+            add(wire(1, 3, 3, 0, HouseholdWireKind.NEUTRAL))
             add(wire(2, 1, 6, 0, HouseholdWireKind.PHASE))
             add(wire(6, 1, 5, 0, HouseholdWireKind.LOAD))
-            add(wire(2, 2, 7, 0, HouseholdWireKind.PHASE))
-            add(wire(3, 2, 7, 1, HouseholdWireKind.NEUTRAL))
-            add(wire(4, 2, 7, 2, HouseholdWireKind.PE))
+            add(wire(5, 1, 3, 2, HouseholdWireKind.LOAD))
+            add(wire(2, 5, 7, 0, HouseholdWireKind.PHASE))
+            add(wire(3, 5, 7, 1, HouseholdWireKind.NEUTRAL))
+            add(wire(4, 5, 7, 2, HouseholdWireKind.PE))
         }
         selectedId = null
         pending = null
@@ -459,7 +458,7 @@ private fun DrawScope.drawHouseholdWire(state: HouseholdState, wire: HouseholdWi
         HouseholdWireKind.PE -> Color(0xFF9BD48B)
         HouseholdWireKind.LOAD -> Color(0xFFFFC857)
     }
-    val midY = (p1.y + p2.y) / 2f
+    val midY = if (p1.y < p2.y) p2.y - 28f else p2.y + 28f
     val path = Path().apply {
         moveTo(p1.x, p1.y)
         lineTo(p1.x, midY)
@@ -664,6 +663,29 @@ private fun connected(
 }
 
 @Composable
+private fun HouseholdLibraryCard(type: HouseholdDeviceType, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(9.dp),
+        color = LabColors.SurfaceHigh.copy(alpha = 0.7f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, LabColors.OutlineSoft),
+    ) {
+        Column(
+            Modifier.width(80.dp).padding(vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Canvas(Modifier.size(54.dp)) { drawHouseholdThumbnail(type) }
+            Text(
+                type.title,
+                color = LabColors.Ink,
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
 private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier) {
     Column(
         modifier
@@ -678,7 +700,7 @@ private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier)
             Text(category, color = LabColors.InkMuted, fontSize = 9.5.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (type in HouseholdDeviceType.entries.filter { it.category == category }) {
-                    HouseButton(type.title) { state.addDevice(type) }
+                    HouseholdLibraryCard(type) { state.addDevice(type) }
                 }
             }
         }
