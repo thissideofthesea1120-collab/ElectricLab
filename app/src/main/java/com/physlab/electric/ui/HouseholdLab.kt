@@ -21,6 +21,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 enum class HouseholdWireKind { PHASE, NEUTRAL, PE, LOAD }
 
@@ -121,8 +123,89 @@ class HouseholdState {
     var fault by mutableStateOf(HouseholdFault.NONE)
     var tripped by mutableStateOf(false)
     var version by mutableStateOf(0)
+    var energyKwh by mutableStateOf(0f)
     private var nextId = 1L
     private var nextWireId = 1L
+
+    val totalPower: Float
+        get() {
+            val lamp = if (isLampOn(this)) 40f else 0f
+            val loads = devices
+                .filter {
+                    it.type == HouseholdDeviceType.KETTLE || it.type == HouseholdDeviceType.RICE_COOKER
+                }
+                .sumOf {
+                    if (devicePowered(it)) {
+                        if (it.type == HouseholdDeviceType.KETTLE) 1500.0 else 700.0
+                    } else {
+                        0.0
+                    }
+                }
+            return lamp + loads.toFloat()
+        }
+
+    val autoShort: Boolean
+        get() {
+            val l = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_PHASE } ?: return false
+            val n = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_NEUTRAL } ?: return false
+            return connected(this, l, 0, n, 0)
+        }
+
+    val autoLeak: Boolean
+        get() {
+            val l = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_PHASE } ?: return false
+            val pe = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_PE } ?: return false
+            return connected(this, l, 0, pe, 0)
+        }
+
+    val overload: Boolean get() = totalPower > 3000f
+
+    private fun connectedTo(a: PlacedHouseholdDevice, at: Int, b: PlacedHouseholdDevice, bt: Int): Boolean =
+        connected(this, a, at, b, bt)
+
+    val warnings: List<String>
+        get() = buildList {
+            if (autoShort) add("相线与中性线短路")
+            if (autoLeak) add("相线与保护线连接，存在漏电")
+            if (overload) add("总功率超过 3000 W，可能过载")
+            val socket = devices.firstOrNull {
+                it.type == HouseholdDeviceType.SOCKET2 || it.type == HouseholdDeviceType.SOCKET3
+            }
+            val l = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_PHASE }
+            val n = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_NEUTRAL }
+            val pe = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_PE }
+            if (socket != null && l != null && n != null &&
+                connectedTo( l!!, 0, socket!!, 1) && connectedTo( n!!, 0, socket, 0)
+            ) {
+                add("插座相线与中性线反接")
+            }
+            if (socket?.type == HouseholdDeviceType.SOCKET3 && pe != null &&
+                !connectedTo( pe!!, 0, socket!!, 2)
+            ) {
+                add("三孔插座保护线未接")
+            }
+            val sw = devices.firstOrNull { it.type == HouseholdDeviceType.SWITCH }
+            if (sw != null && n != null && l != null &&
+                connectedTo( n!!, 0, sw!!, 0) && !connectedTo( l!!, 0, sw, 0)
+            ) {
+                add("开关接在中性线上")
+            }
+        }
+
+    fun tick(seconds: Float) {
+        if (tripped || !mainClosed) return
+        energyKwh += totalPower * seconds / 3600f
+        if (autoShort || autoLeak || overload) {
+            tripped = true
+            mainClosed = false
+        }
+    }
+
+    private fun devicePowered(device: PlacedHouseholdDevice): Boolean {
+        val l = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_PHASE } ?: return false
+        val n = devices.firstOrNull { it.type == HouseholdDeviceType.BUS_NEUTRAL } ?: return false
+        return connected(this, l, 0, device, 0) && connected(this, n, 0, device, 1)
+    }
 
     init {
         resetTemplate()
@@ -156,6 +239,7 @@ class HouseholdState {
         pending = null
         fault = HouseholdFault.NONE
         tripped = false
+        energyKwh = 0f
         version++
     }
 
@@ -263,6 +347,12 @@ enum class HouseholdFault(val title: String) {
 
 @Composable
 fun HouseholdLabScreen(state: HouseholdState, onClose: () -> Unit) {
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            state.tick(1f)
+        }
+    }
     Surface(color = LabColors.Background) {
         Column(Modifier.fillMaxSize()) {
             Row(
@@ -476,7 +566,7 @@ private fun DrawScope.drawHouseholdDevice(state: HouseholdState, device: PlacedH
     ) return
     val selected = state.selectedId == device.id
     when (device.type) {
-        HouseholdDeviceType.METER -> drawMeter(device, center, selected)
+        HouseholdDeviceType.METER -> drawMeter(state, device, center, selected)
         HouseholdDeviceType.MAIN -> drawMainSwitch(device, center, selected)
         HouseholdDeviceType.LAMP -> drawLamp(device, center, selected, isLampOn(state))
         HouseholdDeviceType.SWITCH -> drawSwitch(device, center, selected)
@@ -499,15 +589,20 @@ private fun DrawScope.drawHouseholdDevice(state: HouseholdState, device: PlacedH
     }
 }
 
-private fun DrawScope.drawMeter(device: PlacedHouseholdDevice, center: Offset, selected: Boolean) {
+private fun DrawScope.drawMeter(state: HouseholdState, device: PlacedHouseholdDevice, center: Offset, selected: Boolean) {
     drawRoundRect(Color(0xFF2A3440), Offset(center.x - 41f, center.y - 28f), Size(82f, 56f), CornerRadius(8f))
     drawRoundRect(
         if (selected) Color.White else Color(0xFF6BCBE0),
         Offset(center.x - 41f, center.y - 28f), Size(82f, 56f), CornerRadius(8f),
         style = Stroke(if (selected) 2f else 1.2f),
     )
-    householdText("电能表", center + Offset(0f, -6f), Color(0xFFDCE9F6), 10f)
-    householdText("kWh", center + Offset(0f, 12f), Color(0xFFFFD35C), 11f)
+    householdText("电能表", center + Offset(0f, -10f), Color(0xFFDCE9F6), 9.5f)
+    householdText(
+        String.format(java.util.Locale.US, "%.3f kWh", state.energyKwh),
+        center + Offset(0f, 7f),
+        Color(0xFFFFD35C),
+        10f,
+    )
 }
 
 private fun DrawScope.drawMainSwitch(device: PlacedHouseholdDevice, center: Offset, selected: Boolean) {
@@ -703,6 +798,19 @@ private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier)
                     HouseholdLibraryCard(type) { state.addDevice(type) }
                 }
             }
+        }
+        Text(
+            "当前功率：${String.format(java.util.Locale.US, "%.0f", state.totalPower)} W",
+            color = LabColors.Ink,
+            fontSize = 10.sp,
+        )
+        Text(
+            "电能表：${String.format(java.util.Locale.US, "%.3f", state.energyKwh)} kWh",
+            color = LabColors.InkMuted,
+            fontSize = 9.5.sp,
+        )
+        for (warning in state.warnings) {
+            Text("⚠ $warning", color = Color(0xFFFFC857), fontSize = 9.5.sp)
         }
         val selected = state.devices.firstOrNull { it.id == state.selectedId }
         if (selected != null) {
