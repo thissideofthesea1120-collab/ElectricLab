@@ -573,13 +573,52 @@ private fun DrawScope.drawHouseholdWire(state: HouseholdState, wire: HouseholdWi
         HouseholdWireKind.LOAD -> Color(0xFFFFC857)
     }
     val midY = if (p1.y < p2.y) p2.y - 28f else p2.y + 28f
+    val midX = (p1.x + p2.x) / 2f
+    val boxes = state.devices
+        .filter { it.id != a.id && it.id != b.id && it.type.width > 0f }
+        .map {
+            val halfW = it.type.width / 900f * size.width / 2f + 6f
+            val halfH = it.type.height / 700f * size.height / 2f + 6f
+            HouseholdBox(
+                it.position.x * size.width - halfW,
+                it.position.y * size.height - halfH,
+                it.position.x * size.width + halfW,
+                it.position.y * size.height + halfH,
+            )
+        }
+    val candidates = listOf(
+        listOf(p1, Offset(p1.x, midY), Offset(p2.x, midY), p2),
+        listOf(p1, Offset(midX, p1.y), Offset(midX, p2.y), p2),
+    )
+    val route: List<Offset> = candidates.minByOrNull { points: List<Offset> ->
+        var score = 0
+        for (i in 0 until points.size - 1) {
+            if (boxes.any { box -> segmentHitsBox(points[i], points[i + 1], box) }) score++
+        }
+        score
+    } ?: candidates.first()
     val path = Path().apply {
-        moveTo(p1.x, p1.y)
-        lineTo(p1.x, midY)
-        lineTo(p2.x, midY)
-        lineTo(p2.x, p2.y)
+        route.forEachIndexed { index, point ->
+            if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y)
+        }
     }
     drawPath(path, color, style = Stroke(2.5f))
+}
+
+private data class HouseholdBox(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+private fun segmentHitsBox(start: Offset, end: Offset, box: HouseholdBox): Boolean {
+    return if (kotlin.math.abs(start.x - end.x) < 0.5f) {
+        start.x in box.left..box.right &&
+            maxOf(start.y, end.y) >= box.top &&
+            minOf(start.y, end.y) <= box.bottom
+    } else if (kotlin.math.abs(start.y - end.y) < 0.5f) {
+        start.y in box.top..box.bottom &&
+            maxOf(start.x, end.x) >= box.left &&
+            minOf(start.x, end.x) <= box.right
+    } else {
+        false
+    }
 }
 
 private fun DrawScope.drawHouseholdDevice(state: HouseholdState, device: PlacedHouseholdDevice) {
