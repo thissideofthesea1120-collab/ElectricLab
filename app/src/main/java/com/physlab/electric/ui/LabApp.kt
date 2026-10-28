@@ -214,6 +214,8 @@ fun LabApp(
     var changelogOpen by remember { mutableStateOf(false) }
     var fieldOpen by remember { mutableStateOf(false) }
     val fieldEditor = remember { FieldEditorState() }
+    var householdOpen by remember { mutableStateOf(false) }
+    val householdState = remember { HouseholdState() }
     var challengeExitConfirm by remember { mutableStateOf(false) }
     var snapshots by remember { mutableStateOf(SnapshotStore.load(context)) }
     val finishGuide: () -> Unit = {
@@ -329,6 +331,7 @@ fun LabApp(
                 onToggleMagneticField = { showMagneticField = !showMagneticField },
                 onOpenTemplates = { editor.updateTemplateDialog(true) },
                 onOpenField = { fieldOpen = true },
+                onOpenHousehold = { householdOpen = true },
                 onOpenChallenge = { editor.openChallenge() },
                 onOpenSnapshots = { snapshotDialogOpen = true },
                 onOpenRecords = { recordDialogOpen = true },
@@ -757,20 +760,19 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.5.0", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.5.1", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.5.0 · 我的模板\n\n" +
-                            "• 当前实验可保存为模板\n" +
-                            "• 保留仪器位置、接线和导线拐点\n" +
-                            "• 我的模板支持载入、删除\n" +
-                            "• 支持复制模板 JSON\n" +
-                            "• 支持从剪贴板导入模板\n" +
-                            "• 内置模板与我的模板分开展示\n" +
-                            "• 新增普通二极管、热敏电阻、光敏电阻\n" +
-                            "• 普通二极管正向导通、反向截止\n" +
-                            "• 光敏电阻：光照增强，电阻减小\n" +
-                            "• 热敏电阻：温度升高，电阻减小",
+                        "2.5.1 · 家庭电路\n\n" +
+                            "• 新增独立家庭电路模式\n" +
+                            "• 220V 交流、火线零线地线\n" +
+                            "• 配电箱、总开关、漏电保护器\n" +
+                            "• 一个开关一盏灯模板\n" +
+                            "• 两孔/三孔插座模板\n" +
+                            "• 双控开关模板\n" +
+                            "• 短路、过载、漏电故障\n" +
+                            "• 零线断路、开关接零线提示\n" +
+                            "• 当前为演示模式，自由接线后续补充",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,
@@ -854,6 +856,10 @@ fun LabApp(
         if (fieldOpen) {
             FieldLabScreen(state = fieldEditor, onClose = { fieldOpen = false })
         }
+
+        if (householdOpen) {
+            HouseholdLabScreen(state = householdState, onClose = { householdOpen = false })
+        }
     }
 }
 
@@ -870,6 +876,7 @@ private fun EditorTopBar(
     onToggleMagneticField: () -> Unit,
     onOpenTemplates: () -> Unit,
     onOpenField: () -> Unit,
+    onOpenHousehold: () -> Unit,
     onOpenChallenge: () -> Unit,
     onOpenSnapshots: () -> Unit,
     onOpenRecords: () -> Unit,
@@ -933,6 +940,8 @@ private fun EditorTopBar(
             Spacer(if (portrait) Modifier.width(14.dp) else Modifier.weight(1f))
 
             TopTextButton("电场", onOpenField)
+            Spacer(Modifier.width(4.dp))
+            TopTextButton("家庭", onOpenHousehold)
             Spacer(Modifier.width(4.dp))
             TopTextButton("记录表", onOpenRecords)
             Spacer(Modifier.width(4.dp))
