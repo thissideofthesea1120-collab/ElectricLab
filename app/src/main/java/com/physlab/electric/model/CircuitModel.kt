@@ -514,6 +514,7 @@ data class ComponentReading(
     val current: Float = 0f,
     val signedCurrent: Float = 0f,
     val voltage: Float = 0f,
+    val signedVoltage: Float = 0f,
     val power: Float = 0f,
     val energized: Boolean = false,
     val ledReversed: Boolean = false,
@@ -640,13 +641,36 @@ fun simulateCircuit(
     timeSeconds: Float = 0f,
 ): CircuitSolution {
     var hotPowers = emptyMap<Long, Float>()
-    var result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds)
-    repeat(3) {
+    var diodeStates = components
+        .filter { it.type == InstrumentType.DIODE }
+        .associate { it.id to true }
+    var result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds, diodeStates)
+    repeat(5) {
         val tempLamps = components.filter { it.type == InstrumentType.TEMP_LAMP }
-        if (tempLamps.isEmpty()) return attachMultimeterMeasurements(components, wires, result)
-        hotPowers = tempLamps.associateWith { result.readings[it.id]?.power ?: 0f }
-            .mapKeys { it.key.id }
-        result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds)
+        val nextHot = if (tempLamps.isEmpty()) {
+            hotPowers
+        } else {
+            tempLamps.associateWith { result.readings[it.id]?.power ?: 0f }
+                .mapKeys { it.key.id }
+        }
+        val nextDiodeStates = diodeStates.toMutableMap()
+        for (diode in components.filter { it.type == InstrumentType.DIODE }) {
+            val reading = result.readings[diode.id] ?: ComponentReading()
+            val on = diodeStates[diode.id] ?: true
+            val forwardVoltage = reading.signedVoltage > 0.6f
+            val reverseCurrent = reading.signedCurrent < -0.0001f
+            nextDiodeStates[diode.id] = when {
+                on && reverseCurrent -> false
+                !on && forwardVoltage -> true
+                else -> on
+            }
+        }
+        if (nextHot == hotPowers && nextDiodeStates == diodeStates) {
+            return attachMultimeterMeasurements(components, wires, result)
+        }
+        hotPowers = nextHot
+        diodeStates = nextDiodeStates
+        result = simulateCircuitOnce(components, wires, hotPowers, dynamicState, dt, epoch, timeSeconds, diodeStates)
     }
     return attachMultimeterMeasurements(components, wires, result)
 }
@@ -996,6 +1020,7 @@ private fun simulateCircuitOnce(
     dt: Float = 0.05f,
     epoch: Long = 0L,
     timeSeconds: Float = 0f,
+    diodeStates: Map<Long, Boolean> = emptyMap(),
 ): CircuitSolution {
     if (components.isEmpty()) return CircuitSolution(epoch = epoch)
     val byId = components.associateBy { it.id }
@@ -1218,7 +1243,8 @@ private fun simulateCircuitOnce(
             component.type == InstrumentType.MOTOR -> addBranch(component.id, t0, t1, 12f)
             component.type == InstrumentType.BUZZER -> addBranch(component.id, t0, t1, 30f)
             component.type == InstrumentType.LED -> addBranch(component.id, t0, t1, 180f)
-            component.type == InstrumentType.DIODE -> addBranch(component.id, t0, t1, 30f)
+            component.type == InstrumentType.DIODE ->
+                addBranch(component.id, t0, t1, if (diodeStates[component.id] == false) 1_000_000f else 30f)
             component.type == InstrumentType.THERMISTOR ||
                 component.type == InstrumentType.PHOTORESISTOR ->
                 addBranch(component.id, t0, t1, component.sensorResistance.coerceAtLeast(1f))
@@ -1433,6 +1459,7 @@ private fun simulateCircuitOnce(
             current = current,
             signedCurrent = signedCurrent,
             voltage = voltage,
+            signedVoltage = (v(t0) - v(t1)).toFloat(),
             power = kotlin.math.abs(current * current * resistance),
             energized = energized,
             ledReversed = ledReversed,

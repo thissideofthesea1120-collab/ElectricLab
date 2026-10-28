@@ -311,6 +311,12 @@ private fun ComponentInspector(
 
             InstrumentType.DIODE -> {
                 Text("普通二极管", color = LabColors.Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                val reverse = (reading?.signedVoltage ?: 0f) < -0.6f
+                Text(
+                    if (reverse) "反向截止，电流几乎为零" else "正向导通",
+                    color = if (reverse) LabColors.Amber else LabColors.Green,
+                    fontSize = 9.5.sp,
+                )
                 SpecText("单向导电，正向导通、反向截止")
             }
 
