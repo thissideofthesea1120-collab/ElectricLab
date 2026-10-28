@@ -66,6 +66,15 @@ enum class HouseholdDeviceType(
         HouseholdTerminalSpec(Offset(-26f, 40f), HouseholdWireKind.NEUTRAL, "N"),
         HouseholdTerminalSpec(Offset(26f, 40f), HouseholdWireKind.NEUTRAL, "N"),
     ), "配电"),
+    FUSE("保险丝", 76f, 44f, listOf(
+        HouseholdTerminalSpec(Offset(-28f, 16f), HouseholdWireKind.LOAD, "1"),
+        HouseholdTerminalSpec(Offset(28f, 16f), HouseholdWireKind.LOAD, "2"),
+    ), "配电"),
+    TWO_WAY("双控开关", 92f, 62f, listOf(
+        HouseholdTerminalSpec(Offset(-30f, 20f), HouseholdWireKind.LOAD, "COM"),
+        HouseholdTerminalSpec(Offset(28f, 8f), HouseholdWireKind.LOAD, "L1"),
+        HouseholdTerminalSpec(Offset(28f, 34f), HouseholdWireKind.LOAD, "L2"),
+    ), "照明"),
     BUS_PHASE("相线母线", 0f, 0f, (0..5).map {
         HouseholdTerminalSpec(Offset((it - 2.5f) * 95f, 0f), HouseholdWireKind.PHASE, "L${it + 1}")
     }, "母线"),
@@ -198,6 +207,11 @@ class HouseholdState {
         if (autoShort || autoLeak || overload) {
             tripped = true
             mainClosed = false
+            if (autoShort || overload) {
+                devices = devices.map {
+                    if (it.type == HouseholdDeviceType.FUSE) it.copy(blown = true) else it
+                }
+            }
         }
     }
 
@@ -268,9 +282,13 @@ class HouseholdState {
     fun toggleSelectedSwitch() {
         val id = selectedId ?: return
         devices = devices.map {
-            if (it.id == id && (it.type == HouseholdDeviceType.SWITCH || it.type == HouseholdDeviceType.MAIN)) {
-                it.copy(closed = !it.closed)
-            } else it
+            when {
+                it.id != id -> it
+                it.type == HouseholdDeviceType.TWO_WAY -> it.copy(throwIndex = if (it.throwIndex == 0) 1 else 0)
+                it.type == HouseholdDeviceType.SWITCH || it.type == HouseholdDeviceType.MAIN ->
+                    it.copy(closed = !it.closed)
+                else -> it
+            }
         }
         version++
     }
@@ -333,6 +351,8 @@ data class PlacedHouseholdDevice(
     val type: HouseholdDeviceType,
     val position: Offset,
     val closed: Boolean = false,
+    val throwIndex: Int = 0,
+    val blown: Boolean = false,
     val rotation: Float = 0f,
 )
 
@@ -370,7 +390,11 @@ fun HouseholdLabScreen(state: HouseholdState, onClose: () -> Unit) {
                     state.tripped = false
                     state.mainClosed = true
                     state.devices = state.devices.map {
-                        if (it.type == HouseholdDeviceType.MAIN) it.copy(closed = true) else it
+                        when (it.type) {
+                        HouseholdDeviceType.MAIN -> it.copy(closed = true)
+                        HouseholdDeviceType.FUSE -> it.copy(blown = false)
+                        else -> it
+                    }
                     }
                 }
                 Spacer(Modifier.width(8.dp))
@@ -570,6 +594,8 @@ private fun DrawScope.drawHouseholdDevice(state: HouseholdState, device: PlacedH
         HouseholdDeviceType.MAIN -> drawMainSwitch(device, center, selected)
         HouseholdDeviceType.LAMP -> drawLamp(device, center, selected, isLampOn(state))
         HouseholdDeviceType.SWITCH -> drawSwitch(device, center, selected)
+        HouseholdDeviceType.FUSE -> drawFuse(device, center, selected)
+        HouseholdDeviceType.TWO_WAY -> drawTwoWay(device, center, selected)
         HouseholdDeviceType.SOCKET2, HouseholdDeviceType.SOCKET3 -> drawSocket(device, center, selected)
         HouseholdDeviceType.KETTLE, HouseholdDeviceType.RICE_COOKER -> drawAppliance(device, center, selected)
         else -> Unit
@@ -641,6 +667,34 @@ private fun DrawScope.drawSwitch(device: PlacedHouseholdDevice, center: Offset, 
     householdText(if (device.closed) "闭合" else "断开", center + Offset(0f, 28f), Color(0xFFDCE9F6), 8f)
 }
 
+private fun DrawScope.drawFuse(device: PlacedHouseholdDevice, center: Offset, selected: Boolean) {
+    drawRoundRect(Color(0xFFE8DFC8), Offset(center.x - 28f, center.y - 16f), Size(56f, 32f), CornerRadius(6f))
+    drawRoundRect(
+        if (selected) Color.White else Color(0xFFB9AA8A),
+        Offset(center.x - 28f, center.y - 16f), Size(56f, 32f), CornerRadius(6f),
+        style = Stroke(if (selected) 2f else 1f),
+    )
+    drawLine(
+        if (device.blown) Color(0xFFFF5C67) else Color(0xFF8C7A58),
+        center + Offset(-18f, 0f), center + Offset(18f, 0f), 2f,
+    )
+    householdText(if (device.blown) "已熔断" else "保险丝", center + Offset(0f, 30f), Color(0xFFDCE9F6), 8.5f)
+}
+
+private fun DrawScope.drawTwoWay(device: PlacedHouseholdDevice, center: Offset, selected: Boolean) {
+    drawRoundRect(Color(0xFF24303C), Offset(center.x - 42f, center.y - 28f), Size(84f, 56f), CornerRadius(8f))
+    drawRoundRect(
+        if (selected) Color.White else Color(0xFF7FE4C0),
+        Offset(center.x - 42f, center.y - 28f), Size(84f, 56f), CornerRadius(8f),
+        style = Stroke(if (selected) 2f else 1.2f),
+    )
+    val y = center.y - 6f
+    drawLine(Color(0xFF7FE4C0), center + Offset(-24f, y), center + Offset(20f, y), 3f)
+    drawCircle(Color(0xFF7FE4C0), 3.5f, center + Offset(-24f, y))
+    drawCircle(Color(0xFF7FE4C0), 3.5f, center + Offset(20f, y))
+    householdText("双控开关", center + Offset(0f, 26f), Color(0xFFDCE9F6), 8.5f)
+}
+
 private fun DrawScope.drawSocket(device: PlacedHouseholdDevice, center: Offset, selected: Boolean) {
     drawRoundRect(Color(0xFFE7EDF5), Offset(center.x - 32f, center.y - 26f), Size(64f, 58f), CornerRadius(9f))
     drawRoundRect(
@@ -694,8 +748,10 @@ private fun DrawScope.drawPending(state: HouseholdState) {
 private fun isLampOn(state: HouseholdState): Boolean {
     if (!state.mainClosed || state.tripped || state.fault == HouseholdFault.OPEN_NEUTRAL) return false
     val lamp = state.devices.firstOrNull { it.type == HouseholdDeviceType.LAMP } ?: return false
-    val switch = state.devices.firstOrNull { it.type == HouseholdDeviceType.SWITCH } ?: return false
-    if (!switch.closed) return false
+    val switch = state.devices.firstOrNull {
+        it.type == HouseholdDeviceType.SWITCH || it.type == HouseholdDeviceType.TWO_WAY
+    } ?: return false
+    if (switch.type == HouseholdDeviceType.SWITCH && !switch.closed) return false
     val busL = state.devices.firstOrNull { it.type == HouseholdDeviceType.BUS_PHASE } ?: return false
     val busN = state.devices.firstOrNull { it.type == HouseholdDeviceType.BUS_NEUTRAL } ?: return false
     return connected(state, busL, 0, lamp, 0) && connected(state, lamp, 1, busN, 0)
@@ -753,6 +809,16 @@ private fun connected(
             val other = HouseholdTerminalRef(device.id, if (current.index % 2 == 0) current.index + 1 else current.index - 1)
             if (seen.add(other)) queue.add(other)
         }
+        if (device.type == HouseholdDeviceType.FUSE && !device.blown) {
+            val other = HouseholdTerminalRef(device.id, if (current.index == 0) 1 else 0)
+            if (seen.add(other)) queue.add(other)
+        }
+        if (device.type == HouseholdDeviceType.TWO_WAY) {
+            val common = HouseholdTerminalRef(device.id, 0)
+            val throwRef = HouseholdTerminalRef(device.id, device.throwIndex + 1)
+            if (current == common && seen.add(throwRef)) queue.add(throwRef)
+            if (current == throwRef && seen.add(common)) queue.add(common)
+        }
     }
     return false
 }
@@ -791,7 +857,7 @@ private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier)
     ) {
         Text("仪器库", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Text("点击添加，拖动仪器，点击两个接线柱连线", color = LabColors.InkFaint, fontSize = 9.sp)
-        for (category in listOf("照明", "插座", "家用电器")) {
+        for (category in listOf("配电", "照明", "插座", "家用电器")) {
             Text(category, color = LabColors.InkMuted, fontSize = 9.5.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (type in HouseholdDeviceType.entries.filter { it.category == category }) {
@@ -815,7 +881,7 @@ private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier)
         val selected = state.devices.firstOrNull { it.id == state.selectedId }
         if (selected != null) {
             Text("已选：${selected.type.title}", color = LabColors.Ink, fontSize = 10.5.sp)
-            if (selected.type == HouseholdDeviceType.SWITCH || selected.type == HouseholdDeviceType.MAIN) {
+            if (selected.type == HouseholdDeviceType.SWITCH || selected.type == HouseholdDeviceType.MAIN || selected.type == HouseholdDeviceType.TWO_WAY) {
                 HouseButton(if (selected.closed) "断开开关" else "闭合开关") { state.toggleSelectedSwitch() }
             }
             HouseButton("删除选中仪器") { state.deleteSelected() }
@@ -836,7 +902,11 @@ private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier)
             state.tripped = false
             state.mainClosed = true
             state.devices = state.devices.map {
-                if (it.type == HouseholdDeviceType.MAIN) it.copy(closed = true) else it
+                when (it.type) {
+                        HouseholdDeviceType.MAIN -> it.copy(closed = true)
+                        HouseholdDeviceType.FUSE -> it.copy(blown = false)
+                        else -> it
+                    }
             }
         }
         Text(
