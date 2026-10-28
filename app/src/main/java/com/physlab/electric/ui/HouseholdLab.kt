@@ -70,7 +70,9 @@ enum class HouseholdDeviceType(
         HouseholdTerminalSpec(Offset(-28f, 16f), HouseholdWireKind.LOAD, "1"),
         HouseholdTerminalSpec(Offset(28f, 16f), HouseholdWireKind.LOAD, "2"),
     ), "配电"),
-    TWO_WAY("双控开关", 92f, 62f, listOf(
+    GROUND("接地", 62f, 52f, listOf(
+        HouseholdTerminalSpec(Offset(0f, 24f), HouseholdWireKind.PE, "PE"),
+    ), "配电"),    TWO_WAY("双控开关", 92f, 62f, listOf(
         HouseholdTerminalSpec(Offset(-30f, 20f), HouseholdWireKind.LOAD, "COM"),
         HouseholdTerminalSpec(Offset(28f, 8f), HouseholdWireKind.LOAD, "L1"),
         HouseholdTerminalSpec(Offset(28f, 34f), HouseholdWireKind.LOAD, "L2"),
@@ -122,6 +124,12 @@ data class HouseholdWire(
     val kind: HouseholdWireKind,
 )
 
+enum class HouseholdPreset(val title: String) {
+    LAMP("一盏灯"),
+    SOCKET("两孔/三孔插座"),
+    TWO_WAY("双控开关"),
+    APPLIANCE("家用电器"),
+}
 @Stable
 class HouseholdState {
     var devices by mutableStateOf<List<PlacedHouseholdDevice>>(emptyList())
@@ -224,42 +232,81 @@ class HouseholdState {
         return connected(this, l, 0, device, 0) && connected(this, n, 0, device, 1)
     }
 
+    var preset by mutableStateOf(HouseholdPreset.LAMP)
+
     init {
-        resetTemplate()
+        loadPreset(HouseholdPreset.LAMP)
     }
 
-    fun resetTemplate() {
+    fun loadPreset(next: HouseholdPreset) {
         nextId = 1L
         nextWireId = 1L
-        val source = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.METER, Offset(0.15f, 0.58f), false)
+        val meter = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.METER, Offset(0.15f, 0.58f), false)
         val main = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.MAIN, Offset(0.31f, 0.58f), true)
         val busL = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_PHASE, Offset(0.62f, 0.15f), false)
         val busN = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_NEUTRAL, Offset(0.62f, 0.23f), false)
         val busPE = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.BUS_PE, Offset(0.62f, 0.31f), false)
-        val lamp = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.LAMP, Offset(0.567f, 0.64f), false)
-        val switch = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SWITCH, Offset(0.462f, 0.48f), false)
-        val socket = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SOCKET3, Offset(0.884f, 0.64f), false)
-        devices = listOf(source, main, busL, busN, busPE, lamp, switch, socket)
+        val ground = PlacedHouseholdDevice(nextId++, HouseholdDeviceType.GROUND, Offset(0.10f, 0.80f), false)
+        val extras = when (next) {
+            HouseholdPreset.LAMP -> listOf(
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.LAMP, Offset(0.567f, 0.64f), false),
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SWITCH, Offset(0.462f, 0.48f), false),
+            )
+            HouseholdPreset.SOCKET -> listOf(
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.SOCKET3, Offset(0.884f, 0.64f), false),
+            )
+            HouseholdPreset.TWO_WAY -> listOf(
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.LAMP, Offset(0.70f, 0.64f), false),
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.TWO_WAY, Offset(0.40f, 0.48f), false),
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.TWO_WAY, Offset(0.55f, 0.48f), false),
+            )
+            HouseholdPreset.APPLIANCE -> listOf(
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.KETTLE, Offset(0.567f, 0.64f), false),
+                PlacedHouseholdDevice(nextId++, HouseholdDeviceType.RICE_COOKER, Offset(0.884f, 0.64f), false),
+            )
+        }
+        devices = listOf(meter, main, busL, busN, busPE, ground) + extras
         wires = buildList {
             add(wire(0, 1, 1, 0, HouseholdWireKind.PHASE))
             add(wire(1, 1, 2, 0, HouseholdWireKind.PHASE))
             add(wire(0, 3, 1, 2, HouseholdWireKind.NEUTRAL))
             add(wire(1, 3, 3, 0, HouseholdWireKind.NEUTRAL))
-            add(wire(2, 1, 6, 0, HouseholdWireKind.PHASE))
-            add(wire(6, 1, 5, 0, HouseholdWireKind.LOAD))
-            add(wire(5, 1, 3, 2, HouseholdWireKind.LOAD))
-            add(wire(2, 5, 7, 0, HouseholdWireKind.PHASE))
-            add(wire(3, 5, 7, 1, HouseholdWireKind.NEUTRAL))
-            add(wire(4, 5, 7, 2, HouseholdWireKind.PE))
+            add(wire(5, 0, 4, 0, HouseholdWireKind.PE))
+            when (next) {
+                HouseholdPreset.LAMP -> {
+                    add(wire(2, 1, 7, 0, HouseholdWireKind.PHASE))
+                    add(wire(7, 1, 6, 0, HouseholdWireKind.LOAD))
+                    add(wire(6, 1, 3, 2, HouseholdWireKind.LOAD))
+                }
+                HouseholdPreset.SOCKET -> {
+                    add(wire(2, 5, 6, 0, HouseholdWireKind.PHASE))
+                    add(wire(3, 5, 6, 1, HouseholdWireKind.NEUTRAL))
+                    add(wire(4, 5, 6, 2, HouseholdWireKind.PE))
+                }
+                HouseholdPreset.TWO_WAY -> {
+                    add(wire(2, 1, 7, 0, HouseholdWireKind.PHASE))
+                    add(wire(7, 1, 8, 1, HouseholdWireKind.LOAD))
+                    add(wire(7, 2, 8, 2, HouseholdWireKind.LOAD))
+                    add(wire(8, 0, 6, 0, HouseholdWireKind.LOAD))
+                    add(wire(6, 1, 3, 2, HouseholdWireKind.LOAD))
+                }
+                HouseholdPreset.APPLIANCE -> {
+                    add(wire(2, 4, 6, 0, HouseholdWireKind.PHASE))
+                    add(wire(3, 4, 6, 1, HouseholdWireKind.NEUTRAL))
+                    add(wire(2, 5, 7, 0, HouseholdWireKind.PHASE))
+                    add(wire(3, 5, 7, 1, HouseholdWireKind.NEUTRAL))
+                }
+            }
         }
+        preset = next
         selectedId = null
         pending = null
         fault = HouseholdFault.NONE
         tripped = false
+        mainClosed = true
         energyKwh = 0f
         version++
     }
-
     private fun wire(ai: Int, at: Int, bi: Int, bt: Int, kind: HouseholdWireKind) = HouseholdWire(
         nextWireId++,
         HouseholdTerminalRef(devices[ai].id, at),
@@ -634,6 +681,7 @@ private fun DrawScope.drawHouseholdDevice(state: HouseholdState, device: PlacedH
     when (device.type) {
         HouseholdDeviceType.METER -> drawMeter(state, device, center, selected)
         HouseholdDeviceType.MAIN -> drawMainSwitch(device, center, selected)
+        HouseholdDeviceType.GROUND -> drawGround(center, selected)
         HouseholdDeviceType.LAMP -> drawLamp(device, center, selected, isLampOn(state))
         HouseholdDeviceType.SWITCH -> drawSwitch(device, center, selected)
         HouseholdDeviceType.FUSE -> drawFuse(device, center, selected)
@@ -709,6 +757,14 @@ private fun DrawScope.drawSwitch(device: PlacedHouseholdDevice, center: Offset, 
     householdText(if (device.closed) "闭合" else "断开", center + Offset(0f, 28f), Color(0xFFDCE9F6), 8f)
 }
 
+private fun DrawScope.drawGround(center: Offset, selected: Boolean) {
+    drawLine(Color(0xFF9BD48B), center + Offset(0f, -22f), center + Offset(0f, 0f), 3f)
+    drawLine(Color(0xFF9BD48B), center + Offset(-20f, 0f), center + Offset(20f, 0f), 3f)
+    drawLine(Color(0xFF9BD48B), center + Offset(-14f, 8f), center + Offset(14f, 8f), 3f)
+    drawLine(Color(0xFF9BD48B), center + Offset(-8f, 16f), center + Offset(8f, 16f), 3f)
+    if (selected) drawCircle(Color.White, 26f, center, style = Stroke(1.5f))
+    householdText("接地", center + Offset(0f, 30f), Color(0xFFDCE9F6), 8.5f)
+}
 private fun DrawScope.drawFuse(device: PlacedHouseholdDevice, center: Offset, selected: Boolean) {
     drawRoundRect(Color(0xFFE8DFC8), Offset(center.x - 28f, center.y - 16f), Size(56f, 32f), CornerRadius(6f))
     drawRoundRect(
@@ -897,6 +953,10 @@ private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
+        Text("实验模板", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        for (preset in HouseholdPreset.entries) {
+            HouseButton(preset.title, primary = state.preset == preset) { state.loadPreset(preset) }
+        }
         Text("仪器库", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Text("点击添加，拖动仪器，点击两个接线柱连线", color = LabColors.InkFaint, fontSize = 9.sp)
         for (category in listOf("配电", "照明", "插座", "家用电器")) {

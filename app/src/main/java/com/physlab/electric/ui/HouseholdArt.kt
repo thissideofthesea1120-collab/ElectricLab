@@ -81,7 +81,12 @@ fun DrawScope.drawHouseholdThumbnail(type: HouseholdDeviceType) {
             drawRoundRect(Color(0xFFE8EEF4), p(-15f, -25f), Size(s(30f), s(50f)), CornerRadius(s(3f)))
             drawRoundRect(Color(0xFF4C5C6B), p(-8f, -12f), Size(s(16f), s(24f)), CornerRadius(s(2f)))
         }
-        HouseholdDeviceType.FUSE -> {
+        HouseholdDeviceType.GROUND -> {
+            drawLine(Color(0xFF9BD48B), p(0f, -20f), p(0f, 0f), s(3f))
+            drawLine(Color(0xFF9BD48B), p(-20f, 0f), p(20f, 0f), s(3f))
+            drawLine(Color(0xFF9BD48B), p(-14f, 8f), p(14f, 8f), s(3f))
+            drawLine(Color(0xFF9BD48B), p(-8f, 16f), p(8f, 16f), s(3f))
+        }        HouseholdDeviceType.FUSE -> {
             drawRoundRect(Color(0xFFE8DFC8), p(-24f, -14f), Size(s(48f), s(28f)), CornerRadius(s(5f)))
             drawRoundRect(Color(0xFFB9AA8A), p(-24f, -14f), Size(s(48f), s(28f)), CornerRadius(s(5f)), style = Stroke(s(1f)))
             drawLine(Color(0xFF8C7A58), p(-16f, 0f), p(16f, 0f), s(2f))
