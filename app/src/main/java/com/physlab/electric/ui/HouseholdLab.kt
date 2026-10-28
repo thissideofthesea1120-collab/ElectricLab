@@ -133,6 +133,7 @@ class HouseholdState {
     var tripped by mutableStateOf(false)
     var version by mutableStateOf(0)
     var energyKwh by mutableStateOf(0f)
+    var mainRatingA by mutableStateOf(10f)
     private var nextId = 1L
     private var nextWireId = 1L
 
@@ -167,7 +168,9 @@ class HouseholdState {
             return connected(this, l, 0, pe, 0)
         }
 
-    val overload: Boolean get() = totalPower > 3000f
+    val overload: Boolean get() = totalPower / 220f > mainRatingA
+
+    val ratedPowerW: Float get() = mainRatingA * 220f
 
     private fun connectedTo(a: PlacedHouseholdDevice, at: Int, b: PlacedHouseholdDevice, bt: Int): Boolean =
         connected(this, a, at, b, bt)
@@ -176,7 +179,7 @@ class HouseholdState {
         get() = buildList {
             if (autoShort) add("相线与中性线短路")
             if (autoLeak) add("相线与保护线连接，存在漏电")
-            if (overload) add("总功率超过 3000 W，可能过载")
+            if (overload) add("总功率超过额定 ${mainRatingA.toInt()} A，可能过载")
             val socket = devices.firstOrNull {
                 it.type == HouseholdDeviceType.SOCKET2 || it.type == HouseholdDeviceType.SOCKET3
             }
@@ -924,6 +927,14 @@ private fun HouseholdPanel(state: HouseholdState, modifier: Modifier = Modifier)
                 HouseButton(if (selected.closed) "断开开关" else "闭合开关") { state.toggleSelectedSwitch() }
             }
             HouseButton("删除选中仪器") { state.deleteSelected() }
+        }
+        Text("总开关额定电流", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (rating in listOf(6f, 10f, 16f, 20f)) {
+                HouseButton("${rating.toInt()} A", primary = state.mainRatingA == rating) {
+                    state.mainRatingA = rating
+                }
+            }
         }
         Text("故障模拟", color = LabColors.InkMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         for (fault in HouseholdFault.entries) {
