@@ -201,6 +201,11 @@ class HouseholdState {
             ) {
                 add("插座相线与中性线反接")
             }
+            if (socket != null && l != null && n != null &&
+                (!connectedTo(l!!, 0, socket!!, 0) || !connectedTo(n!!, 0, socket, 1))
+            ) {
+                add("插座缺少相线或中性线")
+            }
             if (socket?.type == HouseholdDeviceType.SOCKET3 && pe != null &&
                 !connectedTo( pe!!, 0, socket!!, 2)
             ) {
