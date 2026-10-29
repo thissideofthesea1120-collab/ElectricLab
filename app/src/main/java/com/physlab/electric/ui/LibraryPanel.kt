@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -166,6 +167,7 @@ fun InstrumentLibrary(
                         onDragEnd = onDragEnd,
                     )
                 }
+                item { ResistorPresetCard { editor.addResistorPresetAtCenter(500f) } }
             }
 
             WirePaletteRow(editor)
@@ -196,6 +198,53 @@ private fun CategoryPill(
             fontSize = 10.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         )
+    }
+}
+
+@Composable
+private fun ResistorPresetCard(onTap: () -> Unit) {
+    val density = LocalDensity.current.density
+    val accent = categoryAccent(InstrumentCategory.CONTROL)
+    Surface(
+        onClick = onTap,
+        shape = RoundedCornerShape(12.dp),
+        color = LabColors.SurfaceRaised.copy(alpha = 0.72f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, LabColors.OutlineSoft),
+        modifier = Modifier.height(84.dp),
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 5.dp, vertical = 5.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(
+                        Brush.radialGradient(listOf(accent.copy(alpha = 0.13f), Color.Transparent)),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(Modifier.fillMaxWidth().height(52.dp)) {
+                    drawInstrument(
+                        type = InstrumentType.RESISTOR,
+                        center = Offset(size.width / 2f, size.height / 2f + 2f * density),
+                        scale = 0.55f * density,
+                        visual = InstrumentVisual(),
+                    )
+                }
+            }
+            Text(
+                "500Ω 定值电阻",
+                color = LabColors.Ink,
+                fontSize = 10.2.sp,
+                lineHeight = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+            )
+        }
     }
 }
 
