@@ -33,7 +33,12 @@ private fun ExperimentTemplate.level(): String = when (this) {
     ExperimentTemplate.SERIES,
     ExperimentTemplate.PARALLEL,
     ExperimentTemplate.OHM_LAW,
-    -> "初中"
+    ExperimentTemplate.SIMPLE,
+    ExperimentTemplate.SERIES_CURRENT,
+    ExperimentTemplate.SERIES_VOLTAGE,
+    ExperimentTemplate.PARALLEL_CURRENT,
+    ExperimentTemplate.PARALLEL_VOLTAGE,
+    ExperimentTemplate.BULB_POWER,    -> "初中"
     else -> "高中"
 }
 
@@ -88,6 +93,7 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                             ExperimentTemplate.MAGNETS -> Color(0xFFFF8E7A)
                             ExperimentTemplate.MULTIMETER -> Color(0xFF8FD7FF)
                             ExperimentTemplate.RC_CHARGE -> Color(0xFF7ED6C4)
+                            else -> Color(0xFF8FD7FF)
                         },
                         onClick = {
                             editor.loadTemplate(template)

@@ -39,7 +39,20 @@ enum class ExperimentTemplate(
     ELECTROMAGNET("电磁铁与磁场", "电磁铁、螺线管、小磁针"),
     MAGNETS("磁体间相互作用", "两块条形磁体与小磁针"),
     MULTIMETER("多用电表测电阻", "电阻与多用电表，选择合适的电阻档"),
-    RC_CHARGE("观察电容器充、放电实验", "电容、电阻、电表等已摆好，请按步骤接线"),
+    RC_CHARGE("观察电容器充、放电实验", "电容、电阻、电表等已摆好，请按步骤接线"),    SIMPLE("简单电路", "电池组、开关、小灯泡"),
+    SERIES_CURRENT("串联电流规律", "串联电路测量各处电流"),
+    SERIES_VOLTAGE("串联电压规律", "串联电路测量各部分电压"),
+    PARALLEL_CURRENT("并联电流规律", "并联电路测量各支路电流"),
+    PARALLEL_VOLTAGE("并联电压规律", "并联电路测量各支路电压"),
+    BULB_POWER("测量小灯泡电功率", "电源、滑动变阻器、灯泡、电表"),
+    VOLT_AMMETER_IN("伏安法·电流表内接", "电流表内接测电阻"),
+    VOLT_AMMETER_OUT("伏安法·电流表外接", "电流表外接测电阻"),
+    DIVIDER("分压接法", "滑动变阻器分压连接"),
+    LIMITER("限流接法", "滑动变阻器限流连接"),
+    BULB_CURVE("小灯泡伏安特性", "测量灯泡的 U-I 关系"),
+    EMF_INTERNAL("测电源电动势和内阻", "改变外电阻，记录 U、I"),
+    METER_MOD("电表改装", "灵敏电流计改装为电压表/电流表"),
+    HALF_BIAS("半偏法测电阻", "灵敏电流计与电阻箱"),
 }
 
 @Stable
@@ -1662,7 +1675,7 @@ class LabEditorState {
         val middle = boardHeight * 0.46f
 
         when (template) {
-            ExperimentTemplate.SERIES -> {
+            ExperimentTemplate.SERIES, ExperimentTemplate.SIMPLE, ExperimentTemplate.SERIES_CURRENT, ExperimentTemplate.SERIES_VOLTAGE -> {
                 val battery = PlacedInstrument(
                     id = nextId++,
                     type = InstrumentType.BATTERY,
@@ -1707,7 +1720,7 @@ class LabEditorState {
                 )
             }
 
-            ExperimentTemplate.PARALLEL -> {
+            ExperimentTemplate.PARALLEL, ExperimentTemplate.PARALLEL_CURRENT, ExperimentTemplate.PARALLEL_VOLTAGE -> {
                 val battery = PlacedInstrument(
                     id = nextId++,
                     type = InstrumentType.BATTERY,
@@ -1753,7 +1766,7 @@ class LabEditorState {
                 )
             }
 
-            ExperimentTemplate.OHM_LAW -> {
+            ExperimentTemplate.OHM_LAW, ExperimentTemplate.BULB_POWER, ExperimentTemplate.VOLT_AMMETER_IN, ExperimentTemplate.VOLT_AMMETER_OUT, ExperimentTemplate.DIVIDER, ExperimentTemplate.LIMITER, ExperimentTemplate.BULB_CURVE, ExperimentTemplate.EMF_INTERNAL, ExperimentTemplate.METER_MOD, ExperimentTemplate.HALF_BIAS -> {
                 val battery = PlacedInstrument(
                     id = nextId++,
                     type = InstrumentType.BATTERY,
