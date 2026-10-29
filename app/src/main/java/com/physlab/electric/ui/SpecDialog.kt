@@ -266,6 +266,9 @@ fun InstrumentSpecDialog(
                             )
                         } else {
                             Text("定值电阻阻值", color = LabColors.InkMuted, fontSize = 10.sp)
+                            var customText by remember(component.id, component.resistance) {
+                                mutableStateOf(component.resistance.toInt().toString())
+                            }
                             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 for (rowValues in listOf(
                                     listOf(5f, 10f, 15f, 20f),
@@ -281,6 +284,28 @@ fun InstrumentSpecDialog(
                                             }
                                         }
                                     }
+                                }
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = customText,
+                                    onValueChange = { input -> customText = input.filter(Char::isDigit).take(5) },
+                                    label = { Text("自定义阻值 Ω") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                val customValue = customText.toIntOrNull()
+                                TextButton(
+                                    enabled = customValue != null && customValue in 1..10_000,
+                                    onClick = {
+                                        customValue?.let { editor.setResistance(component.id, it.toFloat()) }
+                                    },
+                                ) {
+                                    Text("应用", color = LabColors.Primary)
                                 }
                             }
                         }
