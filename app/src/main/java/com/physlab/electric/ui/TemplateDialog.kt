@@ -83,7 +83,18 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                         }
                     }
                 }
-                for (template in ExperimentTemplate.entries.filter { it.isJunior() == juniorTab }) {
+                val importedOrder = listOf(
+                    ExperimentTemplate.SIMPLE,
+                    ExperimentTemplate.SERIES,
+                    ExperimentTemplate.PARALLEL,
+                    ExperimentTemplate.OHM_LAW,
+                    ExperimentTemplate.SERIES_CURRENT,
+                    ExperimentTemplate.SERIES_VOLTAGE,
+                    ExperimentTemplate.PARALLEL_CURRENT,
+                    ExperimentTemplate.PARALLEL_VOLTAGE,
+                )
+                val ordered = importedOrder + ExperimentTemplate.entries.filterNot { it in importedOrder }
+                for (template in ordered.filter { it.isJunior() == juniorTab }) {
                     TemplateRow(
                         title = template.title,
                         subtitle = template.subtitle,
@@ -101,7 +112,12 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                             val asset = when (template) {
                                 ExperimentTemplate.SIMPLE -> "templates/simple_circuit.json"
                                 ExperimentTemplate.SERIES -> "templates/series_circuit.json"
+                                ExperimentTemplate.PARALLEL -> "templates/parallel_circuit.json"
                                 ExperimentTemplate.OHM_LAW -> "templates/ohm_law.json"
+                                ExperimentTemplate.SERIES_CURRENT -> "templates/series_current.json"
+                                ExperimentTemplate.SERIES_VOLTAGE -> "templates/series_voltage.json"
+                                ExperimentTemplate.PARALLEL_CURRENT -> "templates/parallel_current.json"
+                                ExperimentTemplate.PARALLEL_VOLTAGE -> "templates/parallel_voltage.json"
                                 else -> null
                             }
                             val payload = asset?.let {
