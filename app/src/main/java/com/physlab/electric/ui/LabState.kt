@@ -700,14 +700,6 @@ class LabEditorState {
         addInstrument(type, Offset(x, y))
     }
 
-    fun addResistorPresetAtCenter(value: Float) {
-        addInstrumentAtCenter(InstrumentType.RESISTOR)
-        val id = components.lastOrNull()?.id ?: return
-        setResistance(id, value)
-        components = components.map {
-            if (it.id == id) it.copy(label = "R=${value.toInt()}Ω") else it
-        }
-    }
 
     fun moveComponent(id: Long, center: Offset) {
         val component = components.firstOrNull { it.id == id } ?: return

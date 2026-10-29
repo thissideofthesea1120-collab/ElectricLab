@@ -269,7 +269,7 @@ fun InstrumentSpecDialog(
                             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 for (rowValues in listOf(
                                     listOf(5f, 10f, 15f, 20f),
-                                    listOf(50f, 100f, 10_000f),
+                                    listOf(50f, 100f, 500f, 10_000f),
                                 )) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         for (value in rowValues) {
