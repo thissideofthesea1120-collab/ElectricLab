@@ -86,6 +86,10 @@ class LabEditorState {
         private set
     var myTemplatesOpen by mutableStateOf(false)
         private set
+    var activeTemplate by mutableStateOf<ExperimentTemplate?>(null)
+        private set
+    var guideOpen by mutableStateOf(false)
+        private set
     var topologyEpoch by mutableStateOf(0L)
         private set
     var schematicOpen by mutableStateOf(false)
@@ -1003,6 +1007,10 @@ class LabEditorState {
         specTargetId = null
     }
 
+    fun openGuide() { guideOpen = true }
+
+    fun closeGuide() { guideOpen = false }
+
     fun updateTemplateDialog(open: Boolean) {
         if (open && challengeActive) {
             toast = "任务闯关模式禁止使用实验模板"
@@ -1663,6 +1671,7 @@ class LabEditorState {
         meterZoomId = null
         wirePanelId = null
         seeded = true
+        activeTemplate = template
 
         val safeLeft = if (libraryOpen) 226f else 26f
         val left = safeLeft + 76f
