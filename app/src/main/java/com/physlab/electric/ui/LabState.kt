@@ -33,13 +33,14 @@ enum class ExperimentTemplate(
     val title: String,
     val subtitle: String,
 ) {
+    SIMPLE("简单电路", "电池组、开关、小灯泡"),
     SERIES("串联电路", "电池组、开关、小灯泡、电流表"),
     PARALLEL("并联电路", "两只小灯泡并联，干路接电流表"),
     OHM_LAW("伏安法测电阻", "滑动变阻器、电压表、电流表测未知电阻"),
     ELECTROMAGNET("电磁铁与磁场", "电磁铁、螺线管、小磁针"),
     MAGNETS("磁体间相互作用", "两块条形磁体与小磁针"),
     MULTIMETER("多用电表测电阻", "电阻与多用电表，选择合适的电阻档"),
-    RC_CHARGE("观察电容器充、放电实验", "电容、电阻、电表等已摆好，请按步骤接线"),    SIMPLE("简单电路", "电池组、开关、小灯泡"),
+    RC_CHARGE("观察电容器充、放电实验", "电容、电阻、电表等已摆好，请按步骤接线"),
     SERIES_CURRENT("串联电流规律", "串联电路测量各处电流"),
     SERIES_VOLTAGE("串联电压规律", "串联电路测量各部分电压"),
     PARALLEL_CURRENT("并联电流规律", "并联电路测量各支路电流"),
@@ -1657,7 +1658,7 @@ class LabEditorState {
         loadTemplate(ExperimentTemplate.SERIES)
     }
 
-    fun loadTemplate(template: ExperimentTemplate) {
+    fun loadTemplate(template: ExperimentTemplate, presetJson: String? = null) {
         if (boardWidth < 200f || boardHeight < 150f) return
         pushHistory()
         topologyEpoch += 1
@@ -1672,6 +1673,11 @@ class LabEditorState {
         wirePanelId = null
         seeded = true
         activeTemplate = template
+        if (presetJson != null && loadSnapshot(presetJson)) {
+            activeTemplate = template
+            toast = "已载入：${template.title}"
+            return
+        }
 
         val safeLeft = if (libraryOpen) 226f else 26f
         val left = safeLeft + 76f

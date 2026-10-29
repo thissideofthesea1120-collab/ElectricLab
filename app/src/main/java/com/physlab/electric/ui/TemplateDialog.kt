@@ -25,11 +25,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private fun ExperimentTemplate.level(): String = when (this) {
+private fun ExperimentTemplate.isJunior(): Boolean = when (this) {
     ExperimentTemplate.SERIES,
     ExperimentTemplate.PARALLEL,
     ExperimentTemplate.OHM_LAW,
@@ -38,13 +39,14 @@ private fun ExperimentTemplate.level(): String = when (this) {
     ExperimentTemplate.SERIES_VOLTAGE,
     ExperimentTemplate.PARALLEL_CURRENT,
     ExperimentTemplate.PARALLEL_VOLTAGE,
-    ExperimentTemplate.BULB_POWER,    -> "初中"
-    else -> "高中"
+    ExperimentTemplate.BULB_POWER -> true
+    else -> false
 }
 
 @Composable
 fun ExperimentTemplateDialog(editor: LabEditorState) {
-    var level by remember { mutableStateOf("初中") }
+    val context = LocalContext.current
+    var juniorTab by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = { editor.updateTemplateDialog(false) },
         title = {
@@ -65,15 +67,15 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (item in listOf("初中", "高中")) {
+                    for ((item, junior) in listOf("初中" to true, "高中" to false)) {
                         Surface(
-                            onClick = { level = item },
+                            onClick = { juniorTab = junior },
                             shape = RoundedCornerShape(8.dp),
-                            color = if (level == item) LabColors.Primary.copy(alpha = 0.18f) else LabColors.SurfaceHigh,
+                            color = if (juniorTab == junior) LabColors.Primary.copy(alpha = 0.18f) else LabColors.SurfaceHigh,
                         ) {
                             Text(
                                 "${item}实验",
-                                color = if (level == item) LabColors.Primary else LabColors.InkMuted,
+                                color = if (juniorTab == junior) LabColors.Primary else LabColors.InkMuted,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -81,7 +83,7 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                         }
                     }
                 }
-                for (template in ExperimentTemplate.entries.filter { it.level() == level }) {
+                for (template in ExperimentTemplate.entries.filter { it.isJunior() == juniorTab }) {
                     TemplateRow(
                         title = template.title,
                         subtitle = template.subtitle,
@@ -96,7 +98,16 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                             else -> Color(0xFF8FD7FF)
                         },
                         onClick = {
-                            editor.loadTemplate(template)
+                            val asset = when (template) {
+                                ExperimentTemplate.SIMPLE -> "templates/simple_circuit.json"
+                                ExperimentTemplate.SERIES -> "templates/series_circuit.json"
+                                ExperimentTemplate.OHM_LAW -> "templates/ohm_law.json"
+                                else -> null
+                            }
+                            val payload = asset?.let {
+                                runCatching { context.assets.open(it).bufferedReader().readText() }.getOrNull()
+                            }
+                            editor.loadTemplate(template, payload)
                             editor.updateTemplateDialog(false)
                         },
                     )
