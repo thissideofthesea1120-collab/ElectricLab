@@ -25,8 +25,8 @@ android {
         applicationId = "com.physlab.electric"
         minSdk = 23
         targetSdk = 35
-        versionCode = 51
-        versionName = "2.5.1"
+        versionCode = 52
+        versionName = "2.5.2"
         resourceConfigurations += listOf("zh")
     }
 

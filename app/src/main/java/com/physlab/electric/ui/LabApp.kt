@@ -713,6 +713,10 @@ fun LabApp(
             ExperimentTemplateDialog(editor = editor)
         }
 
+        if (editor.myTemplatesOpen) {
+            MyTemplatesDialog(editor = editor)
+        }
+
         if (snapshotDialogOpen) {
             SnapshotDialog(
                 snapshots = snapshots,
@@ -757,15 +761,16 @@ fun LabApp(
         if (changelogOpen) {
             AlertDialog(
                 onDismissRequest = { changelogOpen = false },
-                title = { Text("更新日志 · 2.5.1", fontWeight = FontWeight.Bold) },
+                title = { Text("更新日志 · 2.5.2", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.5.1 · 移除家庭电路\n\n" +
-                            "• 移除家庭电路模式\n" +
-                            "• 移除家庭电路页面和仪器库\n" +
-                            "• 移除家庭电路专用代码\n" +
-                            "• 保留电路实验与电场实验\n" +
-                            "• 保留我的模板和传感器功能",
+                        "2.5.2 · 模板分区\n\n" +
+                            "• 实验模板按初中、高中分区\n" +
+                            "• 我的模板独立入口\n" +
+                            "• 我的模板保存、载入、删除\n" +
+                            "• 我的模板复制与导入\n" +
+                            "• 家庭电路模式已移除\n" +
+                            "• 保留电路和电场实验",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,
@@ -928,6 +933,8 @@ private fun EditorTopBar(
             Spacer(if (portrait) Modifier.width(14.dp) else Modifier.weight(1f))
 
             TopTextButton("电场", onOpenField)
+            Spacer(Modifier.width(4.dp))
+            TopTextButton("我的模板") { editor.openMyTemplates() }
             Spacer(Modifier.width(4.dp))
             TopTextButton("记录表", onOpenRecords)
             Spacer(Modifier.width(4.dp))

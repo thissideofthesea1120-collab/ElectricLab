@@ -71,6 +71,8 @@ class LabEditorState {
         private set
     var templateDialogOpen by mutableStateOf(false)
         private set
+    var myTemplatesOpen by mutableStateOf(false)
+        private set
     var topologyEpoch by mutableStateOf(0L)
         private set
     var schematicOpen by mutableStateOf(false)
@@ -994,6 +996,18 @@ class LabEditorState {
             return
         }
         templateDialogOpen = open
+    }
+
+    fun openMyTemplates() {
+        if (challengeActive) {
+            toast = "任务闯关模式禁止使用实验模板"
+            return
+        }
+        myTemplatesOpen = true
+    }
+
+    fun closeMyTemplates() {
+        myTemplatesOpen = false
     }
 
     fun applyDamage(
