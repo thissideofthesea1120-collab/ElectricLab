@@ -100,6 +100,7 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                     ExperimentTemplate.EMF_INTERNAL,
                     ExperimentTemplate.METER_MOD,
                     ExperimentTemplate.HALF_BIAS,
+                    ExperimentTemplate.BULB_POWER,
                 )
                 val ordered = importedOrder + ExperimentTemplate.entries.filterNot { it in importedOrder }
                 for (template in ordered.filter { it.isJunior() == juniorTab }) {
@@ -134,6 +135,7 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                                 ExperimentTemplate.EMF_INTERNAL -> "templates/emf_internal.json"
                                 ExperimentTemplate.METER_MOD -> "templates/meter_mod_voltmeter.json"
                                 ExperimentTemplate.HALF_BIAS -> "templates/half_bias.json"
+                                ExperimentTemplate.BULB_POWER -> "templates/bulb_power.json"
                                 else -> null
                             }
                             val payload = asset?.let {
