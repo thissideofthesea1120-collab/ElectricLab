@@ -812,7 +812,7 @@ class LabEditorState {
         if (components.none { it.id == id && it.type == InstrumentType.RHEOSTAT }) return
         pushHistory()
         components = components.map {
-            if (it.id == id) it.copy(rheostatMax = max.coerceIn(1f, 100f)) else it
+            if (it.id == id) it.copy(rheostatMax = max.coerceIn(1f, 10_000f)) else it
         }
         toast = "滑动变阻器最大阻值 ${max.toInt()} Ω"
     }

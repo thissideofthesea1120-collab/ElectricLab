@@ -313,15 +313,25 @@ fun InstrumentSpecDialog(
 
                     InstrumentType.RHEOSTAT -> {
                         Text("最大阻值", color = LabColors.InkMuted, fontSize = 10.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (value in listOf(10f, 20f, 30f, 50f, 100f)) {
-                                OptionChip("${value.toInt()} Ω", component.rheostatMax == value) {
-                                    editor.setRheostatMax(component.id, value)
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            for (rowValues in listOf(
+                                listOf(10f, 20f, 30f, 50f, 100f),
+                                listOf(200f, 500f, 1_000f, 5_000f, 10_000f),
+                            )) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    for (value in rowValues) {
+                                        OptionChip(
+                                            if (value >= 1000f) "${(value / 1000f).toInt()} kΩ" else "${value.toInt()} Ω",
+                                            component.rheostatMax == value,
+                                        ) {
+                                            editor.setRheostatMax(component.id, value)
+                                        }
+                                    }
                                 }
                             }
                         }
                         Text(
-                            "也可以直接拖动仪器上的滑片改变接入阻值。",
+                            "半偏法测灵敏电流计内阻时选 10 kΩ，满足 R ≫ Rg。",
                             color = LabColors.InkFaint,
                             fontSize = 9.sp,
                             lineHeight = 13.sp,
