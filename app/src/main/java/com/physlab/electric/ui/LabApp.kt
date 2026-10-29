@@ -214,8 +214,6 @@ fun LabApp(
     var changelogOpen by remember { mutableStateOf(false) }
     var fieldOpen by remember { mutableStateOf(false) }
     val fieldEditor = remember { FieldEditorState() }
-    var householdOpen by remember { mutableStateOf(false) }
-    val householdState = remember { HouseholdState() }
     var challengeExitConfirm by remember { mutableStateOf(false) }
     var snapshots by remember { mutableStateOf(SnapshotStore.load(context)) }
     val finishGuide: () -> Unit = {
@@ -331,7 +329,6 @@ fun LabApp(
                 onToggleMagneticField = { showMagneticField = !showMagneticField },
                 onOpenTemplates = { editor.updateTemplateDialog(true) },
                 onOpenField = { fieldOpen = true },
-                onOpenHousehold = { householdOpen = true },
                 onOpenChallenge = { editor.openChallenge() },
                 onOpenSnapshots = { snapshotDialogOpen = true },
                 onOpenRecords = { recordDialogOpen = true },
@@ -763,20 +760,12 @@ fun LabApp(
                 title = { Text("更新日志 · 2.5.1", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "2.5.1 · 家庭电路\n\n" +
-                            "• 独立家庭电路模式\n" +
-                            "• 电能表、空气开关、配电箱\n" +
-                            "• 相线、中性线、保护线三条母线\n" +
-                            "• 左侧主回路、固定分支布局\n" +
-                            "• 右侧现实器材缩略图仪器库\n" +
-                            "• 灯泡、开关、两孔/三孔插座\n" +
-                            "• 电热水壶、电饭锅\n" +
-                            "• 点击接线柱基础自由接线\n" +
-                            "• 拖动仪器调整位置\n" +
-                            "• 短路、过载、漏电故障\n" +
-                            "• 保险丝、双控开关\n" +
-                            "• 电能表累计电量与实时功率\n" +
-                            "• 插座极性、保护线、接线警告",
+                        "2.5.1 · 移除家庭电路\n\n" +
+                            "• 移除家庭电路模式\n" +
+                            "• 移除家庭电路页面和仪器库\n" +
+                            "• 移除家庭电路专用代码\n" +
+                            "• 保留电路实验与电场实验\n" +
+                            "• 保留我的模板和传感器功能",
                         color = LabColors.InkMuted,
                         fontSize = 10.5.sp,
                         lineHeight = 16.sp,
@@ -860,10 +849,6 @@ fun LabApp(
         if (fieldOpen) {
             FieldLabScreen(state = fieldEditor, onClose = { fieldOpen = false })
         }
-
-        if (householdOpen) {
-            HouseholdLabScreen(state = householdState, onClose = { householdOpen = false })
-        }
     }
 }
 
@@ -880,7 +865,6 @@ private fun EditorTopBar(
     onToggleMagneticField: () -> Unit,
     onOpenTemplates: () -> Unit,
     onOpenField: () -> Unit,
-    onOpenHousehold: () -> Unit,
     onOpenChallenge: () -> Unit,
     onOpenSnapshots: () -> Unit,
     onOpenRecords: () -> Unit,
@@ -944,8 +928,6 @@ private fun EditorTopBar(
             Spacer(if (portrait) Modifier.width(14.dp) else Modifier.weight(1f))
 
             TopTextButton("电场", onOpenField)
-            Spacer(Modifier.width(4.dp))
-            TopTextButton("家庭", onOpenHousehold)
             Spacer(Modifier.width(4.dp))
             TopTextButton("记录表", onOpenRecords)
             Spacer(Modifier.width(4.dp))
