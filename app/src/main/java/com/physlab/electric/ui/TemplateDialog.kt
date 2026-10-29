@@ -96,6 +96,10 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                     ExperimentTemplate.VOLT_AMMETER_IN,
                     ExperimentTemplate.DIVIDER,
                     ExperimentTemplate.LIMITER,
+                    ExperimentTemplate.BULB_CURVE,
+                    ExperimentTemplate.EMF_INTERNAL,
+                    ExperimentTemplate.METER_MOD,
+                    ExperimentTemplate.HALF_BIAS,
                 )
                 val ordered = importedOrder + ExperimentTemplate.entries.filterNot { it in importedOrder }
                 for (template in ordered.filter { it.isJunior() == juniorTab }) {
@@ -126,6 +130,10 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                                 ExperimentTemplate.VOLT_AMMETER_IN -> "templates/volt_ammeter_in.json"
                                 ExperimentTemplate.DIVIDER -> "templates/divider_bulb.json"
                                 ExperimentTemplate.LIMITER -> "templates/limiter_bulb.json"
+                                ExperimentTemplate.BULB_CURVE -> "templates/bulb_curve.json"
+                                ExperimentTemplate.EMF_INTERNAL -> "templates/emf_internal.json"
+                                ExperimentTemplate.METER_MOD -> "templates/meter_mod_voltmeter.json"
+                                ExperimentTemplate.HALF_BIAS -> "templates/half_bias.json"
                                 else -> null
                             }
                             val payload = asset?.let {

@@ -52,8 +52,8 @@ enum class ExperimentTemplate(
     LIMITER("限流接法", "滑动变阻器限流连接"),
     BULB_CURVE("小灯泡伏安特性", "测量灯泡的 U-I 关系"),
     EMF_INTERNAL("测电源电动势和内阻", "改变外电阻，记录 U、I"),
-    METER_MOD("电表改装", "灵敏电流计改装为电压表/电流表"),
-    HALF_BIAS("半偏法测电阻", "灵敏电流计与电阻箱"),
+    METER_MOD("电表改装-电压表", "灵敏电流计改装为电压表/电流表"),
+    HALF_BIAS("半偏法测电流计内阻", "灵敏电流计与电阻箱"),
 }
 
 @Stable
