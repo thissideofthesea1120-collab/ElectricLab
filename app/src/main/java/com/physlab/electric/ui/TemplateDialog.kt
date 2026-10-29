@@ -92,6 +92,10 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                     ExperimentTemplate.SERIES_VOLTAGE,
                     ExperimentTemplate.PARALLEL_CURRENT,
                     ExperimentTemplate.PARALLEL_VOLTAGE,
+                    ExperimentTemplate.VOLT_AMMETER_OUT,
+                    ExperimentTemplate.VOLT_AMMETER_IN,
+                    ExperimentTemplate.DIVIDER,
+                    ExperimentTemplate.LIMITER,
                 )
                 val ordered = importedOrder + ExperimentTemplate.entries.filterNot { it in importedOrder }
                 for (template in ordered.filter { it.isJunior() == juniorTab }) {
@@ -118,6 +122,10 @@ fun ExperimentTemplateDialog(editor: LabEditorState) {
                                 ExperimentTemplate.SERIES_VOLTAGE -> "templates/series_voltage.json"
                                 ExperimentTemplate.PARALLEL_CURRENT -> "templates/parallel_current.json"
                                 ExperimentTemplate.PARALLEL_VOLTAGE -> "templates/parallel_voltage.json"
+                                ExperimentTemplate.VOLT_AMMETER_OUT -> "templates/volt_ammeter_out.json"
+                                ExperimentTemplate.VOLT_AMMETER_IN -> "templates/volt_ammeter_in.json"
+                                ExperimentTemplate.DIVIDER -> "templates/divider_bulb.json"
+                                ExperimentTemplate.LIMITER -> "templates/limiter_bulb.json"
                                 else -> null
                             }
                             val payload = asset?.let {
